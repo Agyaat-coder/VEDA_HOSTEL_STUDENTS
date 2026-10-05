@@ -30,9 +30,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.veda.vedahostelstudents.data.model.AttendanceRecord
-import com.veda.vedahostelstudents.data.model.AttendanceStatus
+import com.veda.vedahostelstudents.data.model.AttendanceSessionType
 import com.veda.vedahostelstudents.ui.theme.VedaBrightBlue
 import com.veda.vedahostelstudents.ui.theme.VedaDarkBackground
+import com.veda.vedahostelstudents.ui.theme.VedaDarkSurface
 import com.veda.vedahostelstudents.ui.theme.VedaTextMuted
 import com.veda.vedahostelstudents.ui.theme.VedaTextPrimary
 
@@ -44,8 +45,8 @@ fun AttendanceHistoryScreen(
     var selectedFilter by remember { mutableStateOf("All") }
 
     val filteredList = when (selectedFilter) {
-        "Present" -> attendanceHistory.filter { it.status == AttendanceStatus.PRESENT }
-        "Missed" -> attendanceHistory.filter { it.status == AttendanceStatus.MISSED }
+        "Morning" -> attendanceHistory.filter { it.sessionType == AttendanceSessionType.MORNING }
+        "Evening" -> attendanceHistory.filter { it.sessionType == AttendanceSessionType.EVENING }
         else -> attendanceHistory
     }
 
@@ -78,12 +79,12 @@ fun AttendanceHistoryScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Filter Chips Row (All, Present, Missed)
+        // Filter Chips Row (All, Morning, Evening)
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            listOf("All", "Present", "Missed").forEach { filter ->
+            listOf("All", "Morning", "Evening").forEach { filter ->
                 val isSelected = selectedFilter == filter
                 FilterChip(
                     selected = isSelected,
@@ -92,7 +93,7 @@ fun AttendanceHistoryScreen(
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = VedaBrightBlue,
                         selectedLabelColor = VedaTextPrimary,
-                        containerColor = VedaDarkBackground,
+                        containerColor = VedaDarkSurface,
                         labelColor = VedaTextMuted
                     )
                 )
@@ -101,13 +102,16 @@ fun AttendanceHistoryScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Full History List
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(filteredList) { record ->
-                AttendanceRecordItem(record = record)
+        if (filteredList.isEmpty()) {
+            EmptyAttendanceHistoryView()
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(filteredList) { record ->
+                    AttendanceRecordItem(record = record)
+                }
             }
         }
     }

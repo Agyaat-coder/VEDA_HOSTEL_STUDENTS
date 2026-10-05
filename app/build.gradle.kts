@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)
 }
 
 android {
@@ -8,7 +9,7 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.veda.vedahostelstudents"
+        applicationId = "com.veda.vedahostelstudent"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

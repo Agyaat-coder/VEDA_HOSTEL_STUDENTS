@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.veda.vedahostelstudents.data.model.MealItem
@@ -73,7 +74,7 @@ fun MessMenuScreen(
                     color = VedaTextPrimary
                 )
                 Text(
-                    text = messMenu.dayName,
+                    text = messMenu.dateText.ifBlank { "Today" },
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = VedaBrightBlue
@@ -83,13 +84,60 @@ fun MessMenuScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Meal Cards List
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            items(messMenu.meals) { meal ->
-                MealCard(meal = meal)
+        if (!messMenu.isPublished || messMenu.meals.isEmpty()) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                color = VedaDarkSurface
+            ) {
+                Column(
+                    modifier = Modifier.padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(VedaBrightBlue.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Restaurant,
+                            contentDescription = "No Menu",
+                            tint = VedaBrightBlue,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Today's menu is not available",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = VedaTextPrimary
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "Check back later for the updated mess menu.",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = VedaTextMuted,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        } else {
+            // Meal Cards List
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(messMenu.meals) { meal ->
+                    MealCard(meal = meal)
+                }
             }
         }
     }
@@ -133,21 +181,23 @@ private fun MealCard(
                             fontWeight = FontWeight.Bold,
                             color = VedaTextPrimary
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Filled.AccessTime,
-                                contentDescription = "Time",
-                                tint = VedaTextMuted,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = meal.timeText,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = VedaTextMuted
-                            )
+                        if (meal.timeText.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Filled.AccessTime,
+                                    contentDescription = "Time",
+                                    tint = VedaTextMuted,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = meal.timeText,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = VedaTextMuted
+                                )
+                            }
                         }
                     }
                 }
@@ -178,25 +228,27 @@ private fun MealCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            if (meal.items.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(14.dp))
 
-            // Meal Items List
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                meal.items.forEach { dish ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(VedaBrightBlue)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = dish,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = VedaTextPrimary
-                        )
+                // Meal Items List
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    meal.items.forEach { dish ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(VedaBrightBlue)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = dish,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = VedaTextPrimary
+                            )
+                        }
                     }
                 }
             }

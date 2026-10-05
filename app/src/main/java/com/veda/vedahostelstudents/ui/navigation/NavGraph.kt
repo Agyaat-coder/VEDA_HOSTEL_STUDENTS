@@ -8,6 +8,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -15,6 +16,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.veda.vedahostelstudents.data.repository.HostelRepository
+import com.veda.vedahostelstudents.data.repository.StudentAttendanceRepository
 import com.veda.vedahostelstudents.ui.components.BottomTab
 import com.veda.vedahostelstudents.ui.components.VedaBottomBar
 import com.veda.vedahostelstudents.ui.screens.activation.AccountActivationScreen
@@ -34,6 +36,7 @@ import com.veda.vedahostelstudents.ui.screens.profile.NotificationsScreen
 import com.veda.vedahostelstudents.ui.screens.profile.ProfileScreen
 import com.veda.vedahostelstudents.ui.screens.splash.SplashScreen
 import com.veda.vedahostelstudents.ui.screens.today.TodayScreen
+import kotlinx.coroutines.launch
 
 @Composable
 fun AppNavGraph() {
@@ -42,9 +45,15 @@ fun AppNavGraph() {
 
     val student by HostelRepository.student.collectAsState()
     val activeSession by HostelRepository.activeSession.collectAsState()
+    val nextSessionInfo by HostelRepository.nextSessionInfo.collectAsState()
+    val attendanceSchedule by HostelRepository.attendanceSchedule.collectAsState()
     val hasMarkedCurrentSession by HostelRepository.hasMarkedCurrentSession.collectAsState()
+    val currentSessionRecord by HostelRepository.currentSessionRecord.collectAsState()
     val attendanceHistory by HostelRepository.attendanceHistory.collectAsState()
+    val isHistoryLoading by HostelRepository.isHistoryLoading.collectAsState()
+    val historyError by HostelRepository.historyError.collectAsState()
     val notices by HostelRepository.notices.collectAsState()
+    val contacts by HostelRepository.contacts.collectAsState()
     val messMenu by HostelRepository.messMenu.collectAsState()
     val hostelInfo by HostelRepository.hostelInfo.collectAsState()
     val attendanceReminders by HostelRepository.attendanceRemindersEnabled.collectAsState()
@@ -93,9 +102,6 @@ fun AppNavGraph() {
                     navController.navigate(Screen.ActivationSuccess.route) {
                         popUpTo(Screen.AccountActivation.route) { inclusive = true }
                     }
-                },
-                onVerifyCode = { code ->
-                    HostelRepository.verifyActivationCode(context, code)
                 }
             )
         }
@@ -130,11 +136,11 @@ fun AppNavGraph() {
                         TodayScreen(
                             student = student,
                             activeSession = activeSession,
+                            nextSessionInfo = nextSessionInfo,
+                            schedule = attendanceSchedule,
                             hasMarkedCurrentSession = hasMarkedCurrentSession,
+                            currentSessionRecord = currentSessionRecord,
                             unreadNoticesCount = unreadNoticesCount,
-                            onMarkPresentClick = {
-                                navController.navigate(Screen.MarkAttendance.route)
-                            },
                             onNoticesClick = {
                                 selectedBottomTab = BottomTab.HOSTEL
                             },
@@ -150,6 +156,8 @@ fun AppNavGraph() {
                     BottomTab.ACTIVITY -> {
                         ActivityScreen(
                             attendanceHistory = attendanceHistory,
+                            isLoading = isHistoryLoading,
+                            errorMessage = historyError,
                             onViewAllAttendance = {
                                 navController.navigate(Screen.AttendanceHistory.route)
                             }
@@ -161,9 +169,14 @@ fun AppNavGraph() {
                             student = student,
                             hostelInfo = hostelInfo,
                             notices = notices,
+                            contacts = contacts,
+                            messMenu = messMenu,
                             onNoticeClick = { notice ->
                                 HostelRepository.markNoticeRead(notice.id)
                                 Toast.makeText(context, "Notice: ${notice.title}", Toast.LENGTH_SHORT).show()
+                            },
+                            onViewMessMenu = {
+                                navController.navigate(Screen.MessMenu.route)
                             }
                         )
                     }
@@ -193,14 +206,22 @@ fun AppNavGraph() {
         // Secondary Mark Attendance Details Screen
         composable(Screen.MarkAttendance.route) {
             val session = activeSession
+            val scope = rememberCoroutineScope()
+
             if (session != null) {
                 MarkAttendanceScreen(
                     session = session,
                     onBack = { navController.popBackStack() },
                     onMarkPresence = {
-                        HostelRepository.markAttendance()
-                        navController.navigate(Screen.AttendanceSuccess.route) {
-                            popUpTo(Screen.MarkAttendance.route) { inclusive = true }
+                        scope.launch {
+                            val res = StudentAttendanceRepository.markAttendance(context)
+                            res.onSuccess {
+                                navController.navigate(Screen.AttendanceSuccess.route) {
+                                    popUpTo(Screen.MarkAttendance.route) { inclusive = true }
+                                }
+                            }.onFailure { err ->
+                                Toast.makeText(context, err.message ?: "Failed to mark attendance", Toast.LENGTH_LONG).show()
+                            }
                         }
                     }
                 )

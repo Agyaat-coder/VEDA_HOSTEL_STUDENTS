@@ -35,6 +35,8 @@ fun AccountDetailsScreen(
     student: Student,
     onBack: () -> Unit
 ) {
+    val displayName = student.fullName.ifBlank { student.name }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -79,15 +81,17 @@ fun AccountDetailsScreen(
                         modifier = Modifier.padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        DetailFieldRow(label = "Student ID", value = student.id)
-                        DetailFieldRow(label = "Roll Number", value = student.rollNumber)
-                        DetailFieldRow(label = "Full Name", value = student.name)
-                        DetailFieldRow(label = "Course", value = student.course)
-                        DetailFieldRow(label = "Branch", value = student.branch)
-                        DetailFieldRow(label = "Year", value = student.year)
-                        DetailFieldRow(label = "Hostel", value = student.hostelName)
-                        DetailFieldRow(label = "Room Number", value = student.roomNumber)
-                        DetailFieldRow(label = "Floor", value = "Floor ${student.floorNumber}")
+                        DetailFieldRow(label = "Student ID", value = student.studentId.ifBlank { student.id.ifBlank { "Not available" } })
+                        DetailFieldRow(label = "Roll Number", value = student.rollNumber.ifBlank { "Not available" })
+                        DetailFieldRow(label = "Full Name", value = displayName.ifBlank { "Not available" })
+                        DetailFieldRow(label = "Email", value = student.email.ifBlank { "Not available" })
+                        DetailFieldRow(label = "Phone", value = student.phoneNumber.ifBlank { "Not available" })
+                        DetailFieldRow(label = "Course", value = student.course.ifBlank { "Not available" })
+                        DetailFieldRow(label = "Branch", value = student.branch.ifBlank { "Not available" })
+                        DetailFieldRow(label = "Year", value = student.year.ifBlank { "Not available" })
+                        DetailFieldRow(label = "Hostel", value = student.hostelName.ifBlank { "Not available" })
+                        DetailFieldRow(label = "Room Number", value = if (student.roomNumber.isNotBlank()) "Room ${student.roomNumber}" else "Not available")
+                        DetailFieldRow(label = "Floor", value = if (student.floorNumber.isNotBlank()) "Floor ${student.floorNumber}" else "Not available")
                     }
                 }
             }

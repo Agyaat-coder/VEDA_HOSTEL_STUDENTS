@@ -1,7 +1,6 @@
 package com.veda.vedahostelstudents.ui.screens.activity
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,39 +17,53 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.automirrored.filled.EventNote
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.NightsStay
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.veda.vedahostelstudents.data.model.AttendanceRecord
 import com.veda.vedahostelstudents.data.model.AttendanceSessionType
-import com.veda.vedahostelstudents.data.model.Notice
 import com.veda.vedahostelstudents.ui.components.StatusChip
 import com.veda.vedahostelstudents.ui.theme.VedaAlertRed
 import com.veda.vedahostelstudents.ui.theme.VedaBrightBlue
 import com.veda.vedahostelstudents.ui.theme.VedaDarkBackground
 import com.veda.vedahostelstudents.ui.theme.VedaDarkSurface
-import com.veda.vedahostelstudents.ui.theme.VedaDarkSurfaceVariant
-import com.veda.vedahostelstudents.ui.theme.VedaSuccessGreen
 import com.veda.vedahostelstudents.ui.theme.VedaTextMuted
 import com.veda.vedahostelstudents.ui.theme.VedaTextPrimary
 
 @Composable
 fun ActivityScreen(
     attendanceHistory: List<AttendanceRecord>,
-    onViewAllAttendance: () -> Unit
+    isLoading: Boolean = false,
+    errorMessage: String? = null,
+    onViewAllAttendance: () -> Unit = {}
 ) {
+    var selectedFilter by remember { mutableStateOf("All") }
+
+    val filteredList = when (selectedFilter) {
+        "Morning" -> attendanceHistory.filter { it.sessionType == AttendanceSessionType.MORNING }
+        "Evening" -> attendanceHistory.filter { it.sessionType == AttendanceSessionType.EVENING }
+        else -> attendanceHistory
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -66,136 +79,57 @@ fun ActivityScreen(
             modifier = Modifier.padding(top = 12.dp, bottom = 16.dp)
         )
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        // Session Filter Chips
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            // Attendance Summary Card
-            item {
-                val total = attendanceHistory.size
-                val presentCount = attendanceHistory.count { it.status == com.veda.vedahostelstudents.data.model.AttendanceStatus.PRESENT }
-                val missedCount = total - presentCount
-                val percentage = if (total > 0) ((presentCount.toFloat() / total.toFloat()) * 100).toInt() else 100
+            listOf("All", "Morning", "Evening").forEach { filter ->
+                val isSelected = selectedFilter == filter
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { selectedFilter = filter },
+                    label = { Text(text = filter, fontSize = 13.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = VedaBrightBlue,
+                        selectedLabelColor = VedaTextPrimary,
+                        containerColor = VedaDarkSurface,
+                        labelColor = VedaTextMuted
+                    )
+                )
+            }
+        }
 
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    color = VedaDarkSurface
+        Spacer(modifier = Modifier.height(16.dp))
+
+        when {
+            // STATE 1: LOADING
+            isLoading && attendanceHistory.isEmpty() -> {
+                LoadingAttendanceHistoryView()
+            }
+
+            // STATE 2: ERROR
+            errorMessage != null && attendanceHistory.isEmpty() -> {
+                ErrorAttendanceHistoryView(message = errorMessage)
+            }
+
+            // STATE 3: EMPTY HISTORY
+            filteredList.isEmpty() -> {
+                EmptyAttendanceHistoryView()
+            }
+
+            // STATE 4: ATTENDANCE HISTORY LIST
+            else -> {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        Text(
-                            text = "Attendance Summary",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = VedaTextPrimary
-                        )
-
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Circular Progress Ring
-                            Box(
-                                modifier = Modifier.size(90.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    progress = { percentage / 100f },
-                                    modifier = Modifier.fillMaxSize(),
-                                    color = VedaSuccessGreen,
-                                    trackColor = VedaDarkSurfaceVariant,
-                                    strokeWidth = 8.dp
-                                )
-                                Text(
-                                    text = "$percentage%",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = VedaTextPrimary
-                                )
-                            }
-
-                            // Stats Numbers Breakdown
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                StatSummaryRow(
-                                    label = "Present",
-                                    value = "$presentCount",
-                                    color = VedaSuccessGreen
-                                )
-                                StatSummaryRow(
-                                    label = "Missed",
-                                    value = "$missedCount",
-                                    color = VedaAlertRed
-                                )
-                                StatSummaryRow(
-                                    label = "Total",
-                                    value = "$total",
-                                    color = VedaTextPrimary
-                                )
-                            }
-                        }
+                    items(filteredList) { record ->
+                        AttendanceRecordItem(record = record)
                     }
                 }
             }
-
-            // Recent Activity Header
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Recent Activity",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = VedaTextPrimary
-                    )
-                    Text(
-                        text = "View All",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = VedaBrightBlue,
-                        modifier = Modifier.clickable { onViewAllAttendance() }
-                    )
-                }
-            }
-
-            // Recent Activity List Items
-            items(attendanceHistory.take(5)) { record ->
-                AttendanceRecordItem(record = record)
-            }
         }
-    }
-}
-
-@Composable
-private fun StatSummaryRow(
-    label: String,
-    value: String,
-    color: androidx.compose.ui.graphics.Color
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Text(
-            text = "$label:",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            color = VedaTextMuted,
-            modifier = Modifier.width(60.dp)
-        )
-        Text(
-            text = value,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            color = color
-        )
     }
 }
 
@@ -209,123 +143,199 @@ fun AttendanceRecordItem(
         shape = RoundedCornerShape(16.dp),
         color = VedaDarkSurface
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+        Column(
+            modifier = Modifier.padding(16.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val icon = if (record.sessionType == AttendanceSessionType.MORNING) {
-                    Icons.Filled.WbSunny
-                } else {
-                    Icons.Filled.NightsStay
-                }
+            // Top Row: Date & Status Chip
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = record.dateText.ifBlank { record.dateTimeText },
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = VedaTextPrimary
+                )
 
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(VedaBrightBlue.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = "Session",
-                        tint = VedaBrightBlue,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
+                StatusChip(status = record.status)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Bottom Row: Session & Marked Time
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val icon = if (record.sessionType == AttendanceSessionType.MORNING) {
+                        Icons.Filled.WbSunny
+                    } else {
+                        Icons.Filled.NightsStay
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(VedaBrightBlue.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = record.title,
+                            tint = VedaBrightBlue,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
                     Text(
                         text = record.title,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = VedaTextPrimary
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = VedaTextMuted
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
+                }
+
+                if (record.timeText.isNotBlank()) {
                     Text(
-                        text = record.dateTimeText,
+                        text = record.timeText,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Normal,
                         color = VedaTextMuted
                     )
                 }
             }
-
-            StatusChip(status = record.status)
         }
     }
 }
 
 @Composable
-fun NoticeItemCard(
-    notice: Notice,
-    onClick: () -> Unit
-) {
+fun EmptyAttendanceHistoryView() {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
         color = VedaDarkSurface
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+        Column(
+            modifier = Modifier.padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(VedaBrightBlue.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(VedaBrightBlue.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Notifications,
-                        contentDescription = "Notice",
-                        tint = VedaBrightBlue,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = notice.title,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = VedaTextPrimary
-                        )
-                        if (notice.isUnread) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(VedaBrightBlue)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = notice.dateText,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = VedaTextMuted
-                    )
-                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.EventNote,
+                    contentDescription = "No History",
+                    tint = VedaBrightBlue,
+                    modifier = Modifier.size(32.dp)
+                )
             }
 
-            Icon(
-                imageVector = Icons.Filled.ChevronRight,
-                contentDescription = "Open",
-                tint = VedaTextMuted
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "No attendance history yet",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = VedaTextPrimary
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = "Your attendance records will appear here after you mark your presence.",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Normal,
+                color = VedaTextMuted,
+                textAlign = TextAlign.Center,
+                lineHeight = 18.sp
+            )
+        }
+    }
+}
+
+@Composable
+fun LoadingAttendanceHistoryView() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = VedaDarkSurface
+    ) {
+        Column(
+            modifier = Modifier.padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(36.dp),
+                color = VedaBrightBlue,
+                strokeWidth = 3.dp
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Loading attendance history...",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = VedaTextMuted
+            )
+        }
+    }
+}
+
+@Composable
+fun ErrorAttendanceHistoryView(message: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = VedaDarkSurface
+    ) {
+        Column(
+            modifier = Modifier.padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(VedaAlertRed.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Info,
+                    contentDescription = "Error",
+                    tint = VedaAlertRed,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Unable to load attendance history.",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = VedaTextPrimary
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = message.ifBlank { "Please check your internet connection and try again." },
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Normal,
+                color = VedaTextMuted,
+                textAlign = TextAlign.Center
             )
         }
     }

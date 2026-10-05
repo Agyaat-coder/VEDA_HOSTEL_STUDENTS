@@ -28,9 +28,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.veda.vedahostelstudents.data.repository.HostelRepository
+import com.veda.vedahostelstudents.data.repository.StudentActivationRepository
 import com.veda.vedahostelstudents.ui.theme.VedaBrightBlue
 import com.veda.vedahostelstudents.ui.theme.VedaDarkBackground
 import com.veda.vedahostelstudents.ui.theme.VedaPrimaryBlue
@@ -42,6 +45,7 @@ import kotlinx.coroutines.delay
 fun SplashScreen(
     onNavigateNext: () -> Unit
 ) {
+    val context = LocalContext.current
     var startAnimation by remember { mutableStateOf(false) }
     val scaleAnim by animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0.8f,
@@ -56,7 +60,9 @@ fun SplashScreen(
 
     LaunchedEffect(Unit) {
         startAnimation = true
-        delay(1800)
+        HostelRepository.init(context)
+        StudentActivationRepository.checkExistingStudentSession(context)
+        delay(1200)
         onNavigateNext()
     }
 

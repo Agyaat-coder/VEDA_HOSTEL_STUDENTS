@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -27,29 +28,36 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.veda.vedahostelstudents.data.repository.ActivationResult
+import com.veda.vedahostelstudents.data.repository.StudentActivationRepository
 import com.veda.vedahostelstudents.ui.components.CodeInputField
 import com.veda.vedahostelstudents.ui.theme.VedaAlertRed
 import com.veda.vedahostelstudents.ui.theme.VedaBrightBlue
 import com.veda.vedahostelstudents.ui.theme.VedaDarkBackground
 import com.veda.vedahostelstudents.ui.theme.VedaTextMuted
 import com.veda.vedahostelstudents.ui.theme.VedaTextPrimary
+import kotlinx.coroutines.launch
 
 @Composable
 fun AccountActivationScreen(
     onBack: () -> Unit,
-    onActivateSuccess: () -> Unit,
-    onVerifyCode: (String) -> ActivationResult
+    onActivateSuccess: () -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
     var codeState by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isSubmitting by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -69,7 +77,10 @@ fun AccountActivationScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(top = 12.dp)
                 ) {
-                    IconButton(onClick = onBack) {
+                    IconButton(
+                        onClick = onBack,
+                        enabled = !isSubmitting
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
@@ -108,7 +119,7 @@ fun AccountActivationScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Enter the activation code provided by your warden to activate your student account.",
+                    text = "Enter the activation key provided by your warden to activate your student account.",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Normal,
                     color = VedaTextMuted,
@@ -121,8 +132,10 @@ fun AccountActivationScreen(
                 CodeInputField(
                     code = codeState,
                     onCodeChange = { input ->
-                        codeState = input
-                        errorMessage = null
+                        if (!isSubmitting) {
+                            codeState = input
+                            errorMessage = null
+                        }
                     }
                 )
 
@@ -139,7 +152,7 @@ fun AccountActivationScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Warden activation code e.g. VD1234",
+                    text = "Warden activation key e.g. VEDA7K2P",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = VedaTextMuted.copy(alpha = 0.8f)
@@ -149,20 +162,48 @@ fun AccountActivationScreen(
             // Continue Button
             Button(
                 onClick = {
-                    when (onVerifyCode(codeState)) {
-                        ActivationResult.SUCCESS -> onActivateSuccess()
-                        ActivationResult.ALREADY_USED -> {
-                            errorMessage = "This activation code has already been used."
-                        }
-                        ActivationResult.INVALID_CODE -> {
-                            errorMessage = "Invalid activation code."
+                    if (!isSubmitting) {
+                        isSubmitting = true
+                        errorMessage = null
+
+                        scope.launch {
+                            val res = StudentActivationRepository.activateAccount(context, codeState)
+                            isSubmitting = false
+
+                            when (res) {
+                                ActivationResult.SUCCESS -> onActivateSuccess()
+                                ActivationResult.ALREADY_USED -> {
+                                    errorMessage = "This activation key has already been used."
+                                }
+                                ActivationResult.ALREADY_ACTIVATED -> {
+                                    errorMessage = "This student account has already been activated."
+                                }
+                                ActivationResult.INVALID_CODE -> {
+                                    errorMessage = "Invalid activation key. Please check the key and try again."
+                                }
+                                ActivationResult.NETWORK_ERROR -> {
+                                    errorMessage = "Network error. Please check your internet connection."
+                                }
+                                ActivationResult.PERMISSION_DENIED -> {
+                                    errorMessage = "Activation service permission error. Please try again or contact the warden."
+                                }
+                                ActivationResult.SERVICE_UNAVAILABLE -> {
+                                    errorMessage = "Firebase service is temporarily unavailable. Please try again."
+                                }
+                                ActivationResult.TIMEOUT -> {
+                                    errorMessage = "The request timed out. Please try again."
+                                }
+                                ActivationResult.GENERIC_ERROR -> {
+                                    errorMessage = "Unable to activate your account right now. Please try again."
+                                }
+                            }
                         }
                     }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                enabled = codeState.length == 6,
+                enabled = !isSubmitting && codeState.trim().length >= 6,
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = VedaBrightBlue,
@@ -175,17 +216,31 @@ fun AccountActivationScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    Text(
-                        text = "Continue",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "Continue",
-                        modifier = Modifier.size(20.dp)
-                    )
+                    if (isSubmitting) {
+                        CircularProgressIndicator(
+                            color = VedaTextPrimary,
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Activating...",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else {
+                        Text(
+                            text = "Activate Account",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Continue",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }
