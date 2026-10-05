@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
@@ -25,27 +24,41 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.veda.vedahostelstudents.data.model.Student
-import com.veda.vedahostelstudents.ui.theme.VedaAlertRed
-import com.veda.vedahostelstudents.ui.theme.VedaAlertRedBg
-import com.veda.vedahostelstudents.ui.theme.VedaBrightBlue
-import com.veda.vedahostelstudents.ui.theme.VedaDarkBackground
-import com.veda.vedahostelstudents.ui.theme.VedaDarkSurface
-import com.veda.vedahostelstudents.ui.theme.VedaTextMuted
-import com.veda.vedahostelstudents.ui.theme.VedaTextPrimary
+import com.veda.vedahostelstudents.ui.components.VedaCard
+import com.veda.vedahostelstudents.ui.components.VedaStatusBadge
+import com.veda.vedahostelstudents.ui.components.VedaStatusStyle
+import com.veda.vedahostelstudents.ui.theme.VedaAccentSoft
+import com.veda.vedahostelstudents.ui.theme.VedaBorder
+import com.veda.vedahostelstudents.ui.theme.VedaCanvas
+import com.veda.vedahostelstudents.ui.theme.VedaDivider
+import com.veda.vedahostelstudents.ui.theme.VedaError
+import com.veda.vedahostelstudents.ui.theme.VedaErrorSoft
+import com.veda.vedahostelstudents.ui.theme.VedaInk
+import com.veda.vedahostelstudents.ui.theme.VedaMuted
+import com.veda.vedahostelstudents.ui.theme.VedaPrimary
+import com.veda.vedahostelstudents.ui.theme.VedaShapesInstance
+import com.veda.vedahostelstudents.ui.theme.VedaSpacingInstance
+import com.veda.vedahostelstudents.ui.theme.VedaSurface
+import com.veda.vedahostelstudents.ui.theme.VedaTheme
 
 @Composable
 fun ProfileScreen(
@@ -58,83 +71,129 @@ fun ProfileScreen(
     onAboutVedaClick: () -> Unit,
     onSignOutClick: () -> Unit
 ) {
+    var showSignOutDialog by remember { mutableStateOf(false) }
+
+    // Initials calculation for avatar
+    val displayName = student.fullName.ifBlank { student.name }
+    val initials = displayName.trim().split("\\s+".toRegex())
+        .mapNotNull { it.firstOrNull()?.toString() }
+        .take(2)
+        .joinToString("")
+        .uppercase()
+
+    val roomHostelText = if (student.roomNumber.isNotBlank() && student.hostelName.isNotBlank()) {
+        "Room ${student.roomNumber} / ${student.hostelName}"
+    } else if (student.hostelName.isNotBlank()) {
+        student.hostelName
+    } else {
+        "Hostel Student"
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(VedaDarkBackground)
+            .background(VedaCanvas)
             .verticalScroll(rememberScrollState())
-            .padding(20.dp),
+            .padding(horizontal = VedaSpacingInstance.screenPaddingHorizontal),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.xs))
+
         // Top Header Title
         Text(
             text = "Me",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            color = VedaTextPrimary,
+            style = VedaTheme.typography.screenTitle,
+            color = VedaInk,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp, bottom = 20.dp)
+                .padding(vertical = VedaSpacingInstance.md)
         )
 
-        // Profile Avatar Header
-        Box(
-            modifier = Modifier
-                .size(88.dp)
-                .clip(CircleShape)
-                .background(VedaBrightBlue.copy(alpha = 0.2f)),
-            contentAlignment = Alignment.Center
+        // PROMINENT STUDENT IDENTITY CARD (Page 25 & 30)
+        VedaCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = VedaSurface,
+            borderColor = VedaBorder,
+            shape = VedaShapesInstance.card,
+            contentPadding = VedaSpacingInstance.cardPadding
         ) {
-            Icon(
-                imageVector = Icons.Filled.Person,
-                contentDescription = "Profile Avatar",
-                tint = VedaBrightBlue,
-                modifier = Modifier.size(52.dp)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(VedaAccentSoft),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (initials.isNotBlank()) {
+                            Text(
+                                text = initials,
+                                style = VedaTheme.typography.sectionTitle,
+                                fontWeight = FontWeight.Bold,
+                                color = VedaPrimary
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.Person,
+                                contentDescription = "Avatar",
+                                tint = VedaPrimary,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(VedaSpacingInstance.md))
+
+                    Column {
+                        Text(
+                            text = displayName.ifBlank { "Student Profile" },
+                            style = VedaTheme.typography.sectionTitle,
+                            color = VedaInk
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = roomHostelText,
+                            style = VedaTheme.typography.bodySecondary,
+                            color = VedaMuted
+                        )
+                    }
+                }
+
+                VedaStatusBadge(
+                    text = "ACTIVE",
+                    style = VedaStatusStyle.SUCCESS
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.xl))
 
-        Text(
-            text = student.name,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = VedaTextPrimary
-        )
-
-        Spacer(modifier = Modifier.height(2.dp))
-
-        Text(
-            text = "Student ID: ${student.id}",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            color = VedaBrightBlue
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-            text = "${student.hostelName}  •  Room ${student.roomNumber}",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Normal,
-            color = VedaTextMuted
-        )
-
-        Spacer(modifier = Modifier.height(28.dp))
-
-        // Menu Card Items
-        Surface(
+        // GROUPED NAVIGATION SECTIONS (PAGES 25 & 30)
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            color = VedaDarkSurface
+            verticalArrangement = Arrangement.spacedBy(VedaSpacingInstance.lg)
         ) {
-            Column {
+            // ACCOUNT SECTION
+            MenuSection(title = "ACCOUNT") {
                 MenuItem(
                     icon = Icons.Filled.Person,
-                    title = "Account",
+                    title = "Account Details",
                     value = null,
-                    onClick = onAccountClick
+                    onClick = onAccountClick,
+                    showDivider = false
                 )
+            }
+
+            // PREFERENCES SECTION
+            MenuSection(title = "PREFERENCES") {
                 MenuItem(
                     icon = Icons.Filled.Palette,
                     title = "Appearance",
@@ -145,14 +204,24 @@ fun ProfileScreen(
                     icon = Icons.Filled.Notifications,
                     title = "Notifications",
                     value = null,
-                    onClick = onNotificationsClick
+                    onClick = onNotificationsClick,
+                    showDivider = false
                 )
+            }
+
+            // SUPPORT SECTION
+            MenuSection(title = "SUPPORT") {
                 MenuItem(
                     icon = Icons.AutoMirrored.Filled.Help,
                     title = "Help & Feedback",
                     value = null,
-                    onClick = onHelpFeedbackClick
+                    onClick = onHelpFeedbackClick,
+                    showDivider = false
                 )
+            }
+
+            // ABOUT SECTION
+            MenuSection(title = "ABOUT") {
                 MenuItem(
                     icon = Icons.Filled.Info,
                     title = "About VEDA",
@@ -163,18 +232,18 @@ fun ProfileScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.xl))
 
-        // Sign Out Button (Destructive Red)
+        // Log Out Button (Destructive Red)
         Button(
-            onClick = onSignOutClick,
+            onClick = { showSignOutDialog = true },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp),
-            shape = RoundedCornerShape(16.dp),
+            shape = VedaShapesInstance.button,
             colors = ButtonDefaults.buttonColors(
-                containerColor = VedaAlertRedBg,
-                contentColor = VedaAlertRed
+                containerColor = VedaErrorSoft,
+                contentColor = VedaError
             )
         ) {
             Row(
@@ -183,16 +252,106 @@ fun ProfileScreen(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                    contentDescription = "Sign Out",
-                    tint = VedaAlertRed,
+                    contentDescription = "Log Out",
+                    tint = VedaError,
                     modifier = Modifier.size(20.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(VedaSpacingInstance.sm))
                 Text(
-                    text = "Sign Out",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
+                    text = "LOG OUT",
+                    style = VedaTheme.typography.button,
+                    color = VedaError
                 )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.md))
+
+        // Product Tagline & Version Text
+        Text(
+            text = "VEDA CAMPUS PULSE • Version 1.0.0",
+            style = VedaTheme.typography.caption,
+            color = VedaMuted,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.xxl))
+    }
+
+    // Logout Confirmation Dialog
+    if (showSignOutDialog) {
+        AlertDialog(
+            onDismissRequest = { showSignOutDialog = false },
+            title = {
+                Text(
+                    text = "Log out?",
+                    style = VedaTheme.typography.sectionTitle,
+                    color = VedaInk
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to log out of this account?",
+                    style = VedaTheme.typography.bodySecondary,
+                    color = VedaMuted
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showSignOutDialog = false
+                        onSignOutClick()
+                    }
+                ) {
+                    Text(
+                        text = "Log Out",
+                        style = VedaTheme.typography.label,
+                        fontWeight = FontWeight.Bold,
+                        color = VedaError
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showSignOutDialog = false }
+                ) {
+                    Text(
+                        text = "Cancel",
+                        style = VedaTheme.typography.label,
+                        fontWeight = FontWeight.SemiBold,
+                        color = VedaPrimary
+                    )
+                }
+            },
+            containerColor = VedaSurface,
+            shape = VedaShapesInstance.dialog
+        )
+    }
+}
+
+@Composable
+private fun MenuSection(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = VedaTheme.typography.caption,
+            color = VedaMuted,
+            modifier = Modifier.padding(start = 4.dp, bottom = VedaSpacingInstance.xs)
+        )
+
+        VedaCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = VedaSurface,
+            borderColor = VedaBorder,
+            shape = VedaShapesInstance.large,
+            contentPadding = 0.dp
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                content()
             }
         }
     }
@@ -214,7 +373,7 @@ private fun MenuItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 16.dp),
+                .padding(horizontal = VedaSpacingInstance.cardPadding, vertical = VedaSpacingInstance.md),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -222,23 +381,23 @@ private fun MenuItem(
                 Box(
                     modifier = Modifier
                         .size(36.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(VedaBrightBlue.copy(alpha = 0.15f)),
+                        .clip(VedaShapesInstance.small)
+                        .background(VedaAccentSoft),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = title,
-                        tint = VedaBrightBlue,
+                        tint = VedaPrimary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
-                Spacer(modifier = Modifier.width(14.dp))
+                Spacer(modifier = Modifier.width(VedaSpacingInstance.md))
                 Text(
                     text = title,
-                    fontSize = 15.sp,
+                    style = VedaTheme.typography.body,
                     fontWeight = FontWeight.SemiBold,
-                    color = VedaTextPrimary
+                    color = VedaInk
                 )
             }
 
@@ -246,16 +405,15 @@ private fun MenuItem(
                 if (value != null) {
                     Text(
                         text = value,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = VedaTextMuted
+                        style = VedaTheme.typography.caption,
+                        color = VedaMuted
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                 }
                 Icon(
                     imageVector = Icons.Filled.ChevronRight,
                     contentDescription = "Open",
-                    tint = VedaTextMuted
+                    tint = VedaMuted
                 )
             }
         }
@@ -264,9 +422,9 @@ private fun MenuItem(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 18.dp)
+                    .padding(horizontal = VedaSpacingInstance.cardPadding)
                     .height(1.dp)
-                    .background(VedaDarkBackground)
+                    .background(VedaDivider)
             )
         }
     }

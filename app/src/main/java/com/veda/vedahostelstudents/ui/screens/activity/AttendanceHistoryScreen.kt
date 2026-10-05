@@ -14,10 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,87 +24,89 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.veda.vedahostelstudents.data.model.AttendanceRecord
-import com.veda.vedahostelstudents.data.model.AttendanceStatus
-import com.veda.vedahostelstudents.ui.theme.VedaBrightBlue
-import com.veda.vedahostelstudents.ui.theme.VedaDarkBackground
-import com.veda.vedahostelstudents.ui.theme.VedaTextMuted
-import com.veda.vedahostelstudents.ui.theme.VedaTextPrimary
+import com.veda.vedahostelstudents.data.model.AttendanceSessionType
+import com.veda.vedahostelstudents.ui.components.SegmentedControl
+import com.veda.vedahostelstudents.ui.components.VedaEmptyState
+import com.veda.vedahostelstudents.ui.components.VedaIconButton
+import com.veda.vedahostelstudents.ui.theme.VedaCanvas
+import com.veda.vedahostelstudents.ui.theme.VedaInk
+import com.veda.vedahostelstudents.ui.theme.VedaSpacingInstance
+import com.veda.vedahostelstudents.ui.theme.VedaTheme
 
 @Composable
 fun AttendanceHistoryScreen(
     attendanceHistory: List<AttendanceRecord>,
     onBack: () -> Unit
 ) {
-    var selectedFilter by remember { mutableStateOf("All") }
+    val filters = remember { listOf("All", "Morning", "Evening") }
+    var selectedFilterIndex by remember { mutableStateOf(0) }
 
-    val filteredList = when (selectedFilter) {
-        "Present" -> attendanceHistory.filter { it.status == AttendanceStatus.PRESENT }
-        "Missed" -> attendanceHistory.filter { it.status == AttendanceStatus.MISSED }
+    val filteredList = when (selectedFilterIndex) {
+        1 -> attendanceHistory.filter { it.sessionType == AttendanceSessionType.MORNING }
+        2 -> attendanceHistory.filter { it.sessionType == AttendanceSessionType.EVENING }
         else -> attendanceHistory
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(VedaDarkBackground)
-            .padding(20.dp)
+            .background(VedaCanvas)
+            .padding(horizontal = VedaSpacingInstance.screenPaddingHorizontal)
     ) {
-        // Top Nav Bar
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.xs))
+
+        // Top Nav Bar Header
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(top = 12.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = VedaSpacingInstance.sm)
         ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = VedaTextPrimary
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
+            VedaIconButton(
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                onClick = onBack,
+                tint = VedaInk
+            )
+            Spacer(modifier = Modifier.width(VedaSpacingInstance.xs))
             Text(
                 text = "Attendance History",
-                fontSize = 20.sp,
+                style = VedaTheme.typography.screenTitle,
                 fontWeight = FontWeight.Bold,
-                color = VedaTextPrimary
+                color = VedaInk
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.md))
 
-        // Filter Chips Row (All, Present, Missed)
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        // Segmented Control Filter Row (All, Morning, Evening)
+        SegmentedControl(
+            items = filters,
+            selectedIndex = selectedFilterIndex,
+            onSegmentSelected = { selectedFilterIndex = it },
             modifier = Modifier.fillMaxWidth()
-        ) {
-            listOf("All", "Present", "Missed").forEach { filter ->
-                val isSelected = selectedFilter == filter
-                FilterChip(
-                    selected = isSelected,
-                    onClick = { selectedFilter = filter },
-                    label = { Text(text = filter, fontSize = 13.sp) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = VedaBrightBlue,
-                        selectedLabelColor = VedaTextPrimary,
-                        containerColor = VedaDarkBackground,
-                        labelColor = VedaTextMuted
-                    )
-                )
-            }
-        }
+        )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.lg))
 
-        // Full History List
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(filteredList) { record ->
-                AttendanceRecordItem(record = record)
+        if (filteredList.isEmpty()) {
+            VedaEmptyState(
+                title = "No attendance history yet",
+                message = "Your attendance records will appear here after you mark your presence.",
+                icon = Icons.AutoMirrored.Filled.EventNote
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(VedaSpacingInstance.listSpacing)
+            ) {
+                items(filteredList) { record ->
+                    VedaTimelineItem(record = record)
+                }
+                item {
+                    Spacer(modifier = Modifier.height(VedaSpacingInstance.xl))
+                }
             }
         }
     }

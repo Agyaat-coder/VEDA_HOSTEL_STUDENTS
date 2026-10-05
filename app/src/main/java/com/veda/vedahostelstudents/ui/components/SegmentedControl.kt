@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,11 +19,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.veda.vedahostelstudents.ui.theme.VedaBrightBlue
-import com.veda.vedahostelstudents.ui.theme.VedaDarkSurfaceVariant
-import com.veda.vedahostelstudents.ui.theme.VedaTextMuted
-import com.veda.vedahostelstudents.ui.theme.VedaTextPrimary
+import com.veda.vedahostelstudents.ui.theme.VedaMuted
+import com.veda.vedahostelstudents.ui.theme.VedaPrimary
+import com.veda.vedahostelstudents.ui.theme.VedaRaised
+import com.veda.vedahostelstudents.ui.theme.VedaShapesInstance
+import com.veda.vedahostelstudents.ui.theme.VedaSurface
+import com.veda.vedahostelstudents.ui.theme.VedaTheme
 
 @Composable
 fun SegmentedControl(
@@ -37,27 +37,27 @@ fun SegmentedControl(
         modifier = modifier
             .fillMaxWidth()
             .height(44.dp)
-            .clip(RoundedCornerShape(22.dp))
-            .background(VedaDarkSurfaceVariant)
+            .clip(VedaShapesInstance.chip)
+            .background(VedaRaised)
             .padding(4.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth()) {
             items.forEachIndexed { index, item ->
                 val isSelected = index == selectedIndex
                 val backgroundColor by animateColorAsState(
-                    targetValue = if (isSelected) VedaBrightBlue else VedaDarkSurfaceVariant,
-                    label = "bgColor"
+                    targetValue = if (isSelected) VedaPrimary else VedaRaised,
+                    label = "segmentedBgColor"
                 )
                 val textColor by animateColorAsState(
-                    targetValue = if (isSelected) VedaTextPrimary else VedaTextMuted,
-                    label = "textColor"
+                    targetValue = if (isSelected) VedaSurface else VedaMuted,
+                    label = "segmentedTextColor"
                 )
 
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(20.dp))
+                        .clip(VedaShapesInstance.chip)
                         .background(backgroundColor)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
@@ -67,7 +67,7 @@ fun SegmentedControl(
                 ) {
                     Text(
                         text = item,
-                        fontSize = 13.sp,
+                        style = VedaTheme.typography.label,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = textColor
                     )

@@ -44,7 +44,8 @@ import com.veda.vedahostelstudents.ui.theme.VedaTextPrimary
 
 @Composable
 fun OnboardingScreen(
-    onGetStarted: () -> Unit
+    onGetStarted: () -> Unit,
+    onSignIn: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -127,33 +128,59 @@ fun OnboardingScreen(
                 }
             }
 
-            // Get Started Button
-            Button(
-                onClick = onGetStarted,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = VedaBrightBlue,
-                    contentColor = VedaTextPrimary
-                )
+            // Buttons Column (Get Started + Sign In Link)
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Button(
+                    onClick = onGetStarted,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = VedaBrightBlue,
+                        contentColor = VedaTextPrimary
+                    )
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "Get Started",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Get Started",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Get Started",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
+                        text = "Already have an account?",
+                        fontSize = 13.sp,
+                        color = VedaTextMuted
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "Get Started",
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    androidx.compose.material3.TextButton(onClick = onSignIn) {
+                        Text(
+                            text = "Sign In",
+                            fontSize = 13.sp,
+                            color = VedaBrightBlue,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }

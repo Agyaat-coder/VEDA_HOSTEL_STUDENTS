@@ -26,22 +26,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.veda.vedahostelstudents.ui.theme.VedaBrightBlue
-import com.veda.vedahostelstudents.ui.theme.VedaDarkBackground
-import com.veda.vedahostelstudents.ui.theme.VedaPrimaryBlue
-import com.veda.vedahostelstudents.ui.theme.VedaTextMuted
-import com.veda.vedahostelstudents.ui.theme.VedaTextPrimary
+import com.veda.vedahostelstudents.data.repository.HostelRepository
+import com.veda.vedahostelstudents.data.repository.StudentActivationRepository
+import com.veda.vedahostelstudents.ui.theme.VedaAccentSoft
+import com.veda.vedahostelstudents.ui.theme.VedaCanvas
+import com.veda.vedahostelstudents.ui.theme.VedaInk
+import com.veda.vedahostelstudents.ui.theme.VedaMuted
+import com.veda.vedahostelstudents.ui.theme.VedaPrimary
+import com.veda.vedahostelstudents.ui.theme.VedaSpacingInstance
+import com.veda.vedahostelstudents.ui.theme.VedaTheme
 import kotlinx.coroutines.delay
 
 @Composable
 fun SplashScreen(
     onNavigateNext: () -> Unit
 ) {
+    val context = LocalContext.current
     var startAnimation by remember { mutableStateOf(false) }
     val scaleAnim by animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0.8f,
@@ -56,22 +60,16 @@ fun SplashScreen(
 
     LaunchedEffect(Unit) {
         startAnimation = true
-        delay(1800)
+        HostelRepository.init(context)
+        StudentActivationRepository.checkExistingStudentSession(context)
+        delay(1200)
         onNavigateNext()
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        VedaDarkBackground,
-                        VedaDarkBackground,
-                        VedaPrimaryBlue.copy(alpha = 0.2f)
-                    )
-                )
-            ),
+            .background(VedaCanvas),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -81,61 +79,51 @@ fun SplashScreen(
                 .scale(scaleAnim)
                 .alpha(alphaAnim)
         ) {
-            // VEDA Logo Circle
+            // VEDA Logo Emblem Badge
             Box(
                 modifier = Modifier
-                    .size(96.dp)
-                    .background(
-                        brush = Brush.linearGradient(
-                            colors = listOf(VedaPrimaryBlue, VedaBrightBlue)
-                        ),
-                        shape = CircleShape
-                    ),
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(VedaAccentSoft),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Filled.Shield,
                     contentDescription = "VEDA Logo",
-                    tint = VedaTextPrimary,
-                    modifier = Modifier.size(52.dp)
+                    tint = VedaPrimary,
+                    modifier = Modifier.size(44.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(VedaSpacingInstance.md))
 
             Text(
-                text = "VEDA",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color = VedaTextPrimary,
-                letterSpacing = 2.sp
+                text = "VEDA HOSTEL",
+                style = VedaTheme.typography.display,
+                color = VedaInk
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
             Text(
-                text = "Hostel Students",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = VedaBrightBlue
+                text = "CAMPUS PULSE",
+                style = VedaTheme.typography.caption,
+                color = VedaPrimary
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(VedaSpacingInstance.lg))
 
             Text(
-                text = "Your Hostel\nYour Everyday Companion",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = VedaTextMuted,
-                lineHeight = 20.sp
+                text = "Your daily check-in, reimagined.",
+                style = VedaTheme.typography.bodySecondary,
+                color = VedaMuted
             )
         }
 
         Text(
-            text = "Built for a better hostel life",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = VedaTextMuted.copy(alpha = 0.7f),
+            text = "VEDA CAMPUS PULSE • Version 1.0.0",
+            style = VedaTheme.typography.caption,
+            color = VedaMuted,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 36.dp)

@@ -1,25 +1,46 @@
 package com.veda.vedahostelstudents.data.repository
 
 import android.content.Context
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
 import com.veda.vedahostelstudents.data.model.AttendanceRecord
 import com.veda.vedahostelstudents.data.model.AttendanceSession
 import com.veda.vedahostelstudents.data.model.AttendanceSessionType
 import com.veda.vedahostelstudents.data.model.AttendanceStatus
+import com.veda.vedahostelstudents.data.model.ContactInfo
 import com.veda.vedahostelstudents.data.model.HostelInfo
 import com.veda.vedahostelstudents.data.model.MealItem
 import com.veda.vedahostelstudents.data.model.MessDayMenu
 import com.veda.vedahostelstudents.data.model.Notice
 import com.veda.vedahostelstudents.data.model.SessionStatus
 import com.veda.vedahostelstudents.data.model.Student
+import com.veda.vedahostelstudents.data.util.StudentNotificationManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
-enum class ActivationResult {
-    SUCCESS,
-    INVALID_CODE,
-    ALREADY_USED
-}
+data class AttendanceScheduleConfig(
+    val hostelId: String = "",
+    val morningStart: String = "",
+    val morningEnd: String = "",
+    val eveningStart: String = "",
+    val eveningEnd: String = "",
+    val timezone: String = "Asia/Kolkata",
+    val isConfigured: Boolean = false
+)
+
+data class NextSessionInfo(
+    val sessionType: AttendanceSessionType,
+    val title: String,
+    val timeRangeText: String
+)
 
 object HostelRepository {
 
@@ -27,292 +48,798 @@ object HostelRepository {
     private const val KEY_IS_ACTIVATED = "is_activated"
     private const val KEY_STUDENT_ID = "student_id"
     private const val KEY_STUDENT_NAME = "student_name"
+    private const val KEY_ROLL_NUMBER = "roll_number"
+    private const val KEY_HOSTEL_ID = "hostel_id"
     private const val KEY_HOSTEL_NAME = "hostel_name"
+    private const val KEY_CAMPUS = "campus"
+    private const val KEY_ADDRESS = "address"
     private const val KEY_ROOM_NUMBER = "room_number"
     private const val KEY_FLOOR_NUMBER = "floor_number"
+    private const val KEY_COURSE = "course"
+    private const val KEY_BRANCH = "branch"
+    private const val KEY_YEAR = "year"
+    private const val KEY_WARDEN_NAME = "warden_name"
+    private const val KEY_APPEARANCE_PREFERENCE = "appearance_preference"
+
+    // Real-Time Listeners
+    private var studentListener: ListenerRegistration? = null
+    private var hostelListener: ListenerRegistration? = null
+    private var noticesListener: ListenerRegistration? = null
+    private var contactsListener: ListenerRegistration? = null
+    private var messMenuListener: ListenerRegistration? = null
+    private var scheduleListener: ListenerRegistration? = null
+    private var activeHostelId: String? = null
+    private var activeStudentId: String? = null
 
     // Current Student State
     private val _student = MutableStateFlow(Student(isActivated = false))
     val student: StateFlow<Student> = _student.asStateFlow()
 
-    // Initialize repository and check persisted activation state from SharedPreferences
-    fun init(context: Context) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val isActivated = prefs.getBoolean(KEY_IS_ACTIVATED, false)
-        if (isActivated) {
-            val id = prefs.getString(KEY_STUDENT_ID, "24AIM001") ?: "24AIM001"
-            val name = prefs.getString(KEY_STUDENT_NAME, "Devesh Dwivedi") ?: "Devesh Dwivedi"
-            val hostel = prefs.getString(KEY_HOSTEL_NAME, "Charak Chatras") ?: "Charak Chatras"
-            val room = prefs.getString(KEY_ROOM_NUMBER, "214") ?: "214"
-            val floor = prefs.getString(KEY_FLOOR_NUMBER, "2") ?: "2"
+    // Hostel Information
+    private val _hostelInfo = MutableStateFlow(HostelInfo())
+    val hostelInfo: StateFlow<HostelInfo> = _hostelInfo.asStateFlow()
 
-            _student.value = Student(
-                id = id,
-                rollNumber = "2024-AI-001",
-                name = name,
-                hostelName = hostel,
-                roomNumber = room,
-                floorNumber = floor,
-                course = "B.Tech",
-                branch = "Artificial Intelligence",
-                year = "2nd Year",
-                isActivated = true,
-                activationCode = "VD1234"
-            )
-        } else {
-            _student.value = Student(isActivated = false)
-        }
-    }
+    private val _isHostelLoading = MutableStateFlow(false)
+    val isHostelLoading: StateFlow<Boolean> = _isHostelLoading.asStateFlow()
 
-    // Active Attendance Session State (null if no active session)
+    private val _hostelError = MutableStateFlow<String?>(null)
+    val hostelError: StateFlow<String?> = _hostelError.asStateFlow()
+
+    // Attendance Schedule Config
+    private val _attendanceSchedule = MutableStateFlow(AttendanceScheduleConfig())
+    val attendanceSchedule: StateFlow<AttendanceScheduleConfig> = _attendanceSchedule.asStateFlow()
+
+    // Active Attendance Session State
     private val _activeSession = MutableStateFlow<AttendanceSession?>(null)
     val activeSession: StateFlow<AttendanceSession?> = _activeSession.asStateFlow()
 
-    // Recorded Attendance History (MORNING and EVENING sessions only)
-    private val _attendanceHistory = MutableStateFlow<List<AttendanceRecord>>(
-        listOf(
-            AttendanceRecord(
-                id = "1",
-                sessionId = "SESS_1001_MORN",
-                sessionType = AttendanceSessionType.MORNING,
-                title = "Morning Attendance",
-                dateTimeText = "2 Oct 2026 • 07:42 AM",
-                dateText = "2 Oct 2026",
-                timeText = "07:42 AM",
-                monthYearText = "October 2026",
-                status = AttendanceStatus.PRESENT
-            ),
-            AttendanceRecord(
-                id = "2",
-                sessionId = "SESS_1000_EVE",
-                sessionType = AttendanceSessionType.EVENING,
-                title = "Evening Attendance",
-                dateTimeText = "1 Oct 2026 • 08:05 PM",
-                dateText = "1 Oct 2026",
-                timeText = "08:05 PM",
-                monthYearText = "October 2026",
-                status = AttendanceStatus.PRESENT
-            ),
-            AttendanceRecord(
-                id = "3",
-                sessionId = "SESS_0999_MORN",
-                sessionType = AttendanceSessionType.MORNING,
-                title = "Morning Attendance",
-                dateTimeText = "1 Oct 2026 • 07:51 AM",
-                dateText = "1 Oct 2026",
-                timeText = "07:51 AM",
-                monthYearText = "October 2026",
-                status = AttendanceStatus.PRESENT
-            ),
-            AttendanceRecord(
-                id = "4",
-                sessionId = "SESS_0998_EVE",
-                sessionType = AttendanceSessionType.EVENING,
-                title = "Evening Attendance",
-                dateTimeText = "29 Sep 2026 • 08:10 PM",
-                dateText = "29 Sep 2026",
-                timeText = "08:10 PM",
-                monthYearText = "September 2026",
-                status = AttendanceStatus.MISSED
-            ),
-            AttendanceRecord(
-                id = "5",
-                sessionId = "SESS_0997_MORN",
-                sessionType = AttendanceSessionType.MORNING,
-                title = "Morning Attendance",
-                dateTimeText = "29 Sep 2026 • 07:45 AM",
-                dateText = "29 Sep 2026",
-                timeText = "07:45 AM",
-                monthYearText = "September 2026",
-                status = AttendanceStatus.PRESENT
-            ),
-            AttendanceRecord(
-                id = "6",
-                sessionId = "SESS_0996_EVE",
-                sessionType = AttendanceSessionType.EVENING,
-                title = "Evening Attendance",
-                dateTimeText = "28 Sep 2026 • 08:15 PM",
-                dateText = "28 Sep 2026",
-                timeText = "08:15 PM",
-                monthYearText = "September 2026",
-                status = AttendanceStatus.PRESENT
-            ),
-            AttendanceRecord(
-                id = "7",
-                sessionId = "SESS_0995_MORN",
-                sessionType = AttendanceSessionType.MORNING,
-                title = "Morning Attendance",
-                dateTimeText = "28 Sep 2026 • 07:50 AM",
-                dateText = "28 Sep 2026",
-                timeText = "07:50 AM",
-                monthYearText = "September 2026",
-                status = AttendanceStatus.PRESENT
-            )
-        )
-    )
-    val attendanceHistory: StateFlow<List<AttendanceRecord>> = _attendanceHistory.asStateFlow()
+    // Next Session Info
+    private val _nextSessionInfo = MutableStateFlow<NextSessionInfo?>(null)
+    val nextSessionInfo: StateFlow<NextSessionInfo?> = _nextSessionInfo.asStateFlow()
 
     // Has Marked Current Active Session
     private val _hasMarkedCurrentSession = MutableStateFlow(false)
     val hasMarkedCurrentSession: StateFlow<Boolean> = _hasMarkedCurrentSession.asStateFlow()
 
+    // Current Active Session Attendance Record (if marked)
+    private val _currentSessionRecord = MutableStateFlow<AttendanceRecord?>(null)
+    val currentSessionRecord: StateFlow<AttendanceRecord?> = _currentSessionRecord.asStateFlow()
+
+    // Recorded Attendance History
+    private val _attendanceHistory = MutableStateFlow<List<AttendanceRecord>>(emptyList())
+    val attendanceHistory: StateFlow<List<AttendanceRecord>> = _attendanceHistory.asStateFlow()
+
+    private val _isHistoryLoading = MutableStateFlow(false)
+    val isHistoryLoading: StateFlow<Boolean> = _isHistoryLoading.asStateFlow()
+
+    private val _historyError = MutableStateFlow<String?>(null)
+    val historyError: StateFlow<String?> = _historyError.asStateFlow()
+
     // Notices State
-    private val _notices = MutableStateFlow<List<Notice>>(
-        listOf(
-            Notice("N1", "Water Supply Maintenance", "Water supply will be paused tomorrow from 10:00 AM to 1:00 PM for tank cleaning.", "Maintenance", "2 Oct 2026", true),
-            Notice("N2", "Special Mess Menu on Gandhi Jayanti", "Special lunch feast will be served in the central dining hall.", "Mess", "2 Oct 2026", true),
-            Notice("N3", "Late Entry Gate Pass Guidelines", "Students requiring late entry pass must apply 2 hours prior via Warden office.", "Announcement", "28 Sep 2026", false),
-            Notice("N4", "Wi-Fi Maintenance Schedule", "Hostel Wi-Fi routers will undergo routine firmware updates tonight at 12 AM.", "General", "25 Sep 2026", false)
-        )
-    )
+    private val _notices = MutableStateFlow<List<Notice>>(emptyList())
     val notices: StateFlow<List<Notice>> = _notices.asStateFlow()
 
-    // Mess Menu
-    private val _messMenu = MutableStateFlow(
-        MessDayMenu(
-            dayName = "Today (2 Oct 2026)",
-            dateText = "2 Oct 2026",
-            meals = listOf(
-                MealItem("Breakfast", "07:30 AM – 09:30 AM", listOf("Poha", "Boiled Eggs / Sprouts", "Masala Chai", "Banana")),
-                MealItem("Lunch", "12:30 PM – 02:30 PM", listOf("Paneer Butter Masala", "Dal Tadka", "Jeera Rice", "Butter Roti", "Gulab Jamun"), "Festive Special"),
-                MealItem("Evening Snacks", "05:00 PM – 06:00 PM", listOf("Samosa with Mint Chutney", "Coffee / Tea")),
-                MealItem("Dinner", "08:00 PM – 09:30 PM", listOf("Mix Veg Curry", "Arhar Dal", "Plain Rice", "Chapati", "Kheer"))
-            )
-        )
-    )
+    private val _isNoticesLoading = MutableStateFlow(false)
+    val isNoticesLoading: StateFlow<Boolean> = _isNoticesLoading.asStateFlow()
+
+    // Contacts State
+    private val _contacts = MutableStateFlow<List<ContactInfo>>(emptyList())
+    val contacts: StateFlow<List<ContactInfo>> = _contacts.asStateFlow()
+
+    private val _isContactsLoading = MutableStateFlow(false)
+    val isContactsLoading: StateFlow<Boolean> = _isContactsLoading.asStateFlow()
+
+    // Mess Menu State
+    private val _messMenu = MutableStateFlow(MessDayMenu(isPublished = false))
     val messMenu: StateFlow<MessDayMenu> = _messMenu.asStateFlow()
 
-    // Hostel Information
-    private val _hostelInfo = MutableStateFlow(HostelInfo())
-    val hostelInfo: StateFlow<HostelInfo> = _hostelInfo.asStateFlow()
+    private val _isMessLoading = MutableStateFlow(false)
+    val isMessLoading: StateFlow<Boolean> = _isMessLoading.asStateFlow()
 
-    // Notification Toggles
-    private val _attendanceRemindersEnabled = MutableStateFlow(true)
-    val attendanceRemindersEnabled: StateFlow<Boolean> = _attendanceRemindersEnabled.asStateFlow()
+    private var appContext: Context? = null
+    private var hasLoadedNotices = false
 
-    private val _noticeAlertsEnabled = MutableStateFlow(true)
-    val noticeAlertsEnabled: StateFlow<Boolean> = _noticeAlertsEnabled.asStateFlow()
-
-    private val _announcementsEnabled = MutableStateFlow(true)
-    val announcementsEnabled: StateFlow<Boolean> = _announcementsEnabled.asStateFlow()
+    // Canonical Notification Toggles - Delegated to StudentNotificationPreferences
+    val attendanceRemindersEnabled: StateFlow<Boolean> = StudentNotificationPreferences.attendanceRemindersEnabled
+    val noticeAlertsEnabled: StateFlow<Boolean> = StudentNotificationPreferences.hostelNoticesEnabled
+    val announcementsEnabled: StateFlow<Boolean> = StudentNotificationPreferences.importantAnnouncementsEnabled
 
     // Appearance Preference ("System", "Dark", "Light")
     private val _appearancePreference = MutableStateFlow("Dark")
     val appearancePreference: StateFlow<String> = _appearancePreference.asStateFlow()
 
-    // Verification method for activation code
-    fun verifyActivationCode(context: Context, code: String): ActivationResult {
-        val trimmed = code.trim().uppercase()
-        if (trimmed == "USED12" || trimmed == "USED00") {
-            return ActivationResult.ALREADY_USED
+    // Initialize repository and check persisted activation state from SharedPreferences
+    fun init(context: Context) {
+        appContext = context.applicationContext
+        StudentNotificationPreferences.init(context)
+        StudentNotificationManager.createNotificationChannels(context)
+
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        _appearancePreference.value = prefs.getString(KEY_APPEARANCE_PREFERENCE, "System") ?: "System"
+        val isActivated = prefs.getBoolean(KEY_IS_ACTIVATED, false)
+        if (isActivated) {
+            val id = prefs.getString(KEY_STUDENT_ID, "") ?: ""
+            val name = prefs.getString(KEY_STUDENT_NAME, "") ?: ""
+            val roll = prefs.getString(KEY_ROLL_NUMBER, "") ?: ""
+            val hostelId = prefs.getString(KEY_HOSTEL_ID, "") ?: ""
+            val hostel = prefs.getString(KEY_HOSTEL_NAME, "") ?: ""
+            val campus = prefs.getString(KEY_CAMPUS, "") ?: ""
+            val address = prefs.getString(KEY_ADDRESS, "") ?: ""
+            val room = prefs.getString(KEY_ROOM_NUMBER, "") ?: ""
+            val floor = prefs.getString(KEY_FLOOR_NUMBER, "") ?: ""
+            val course = prefs.getString(KEY_COURSE, "B.Tech") ?: "B.Tech"
+            val branch = prefs.getString(KEY_BRANCH, "General") ?: "General"
+            val year = prefs.getString(KEY_YEAR, "1st Year") ?: "1st Year"
+            val warden = prefs.getString(KEY_WARDEN_NAME, "Warden") ?: "Warden"
+
+            _student.value = Student(
+                studentId = id,
+                id = id,
+                rollNumber = roll,
+                fullName = name,
+                name = name,
+                hostelId = hostelId,
+                hostelName = hostel,
+                roomNumber = room,
+                floorNumber = floor,
+                course = course,
+                branch = branch,
+                year = year,
+                wardenName = warden,
+                isActivated = true
+            )
+
+            _hostelInfo.value = HostelInfo(
+                hostelId = hostelId,
+                name = hostel,
+                campus = campus,
+                address = address,
+                wardenName = warden
+            )
+
+            if (hostelId.isNotBlank() && id.isNotBlank()) {
+                startRealtimeListeners(context, hostelId, id)
+            } else {
+                StudentFcmManager.registerCurrentFcmToken(context)
+                StudentFcmManager.syncNotificationPreferencesToServer(
+                    attendanceReminders = attendanceRemindersEnabled.value,
+                    hostelNotices = noticeAlertsEnabled.value,
+                    importantAnnouncements = announcementsEnabled.value
+                )
+            }
+        } else {
+            _student.value = Student(isActivated = false)
         }
-        if (trimmed.length != 6) {
-            return ActivationResult.INVALID_CODE
+    }
+
+    fun startRealtimeListeners(context: Context, hostelId: String, studentId: String) {
+        if (hostelId.isBlank() || studentId.isBlank()) return
+        if (activeHostelId == hostelId && activeStudentId == studentId && studentListener != null) return
+
+        stopRealtimeListeners()
+        activeHostelId = hostelId
+        activeStudentId = studentId
+
+        StudentFcmManager.registerCurrentFcmToken(context)
+        StudentFcmManager.syncNotificationPreferencesToServer(
+            attendanceReminders = attendanceRemindersEnabled.value,
+            hostelNotices = noticeAlertsEnabled.value,
+            importantAnnouncements = announcementsEnabled.value
+        )
+
+        val firestore = FirebaseFirestore.getInstance()
+
+        _isHostelLoading.value = true
+        _isNoticesLoading.value = true
+        _isContactsLoading.value = true
+        _isMessLoading.value = true
+
+        // 1. Real-Time Student Profile Listener
+        studentListener = firestore.collection("hostels")
+            .document(hostelId)
+            .collection("students")
+            .document(studentId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
+
+                val name = snapshot.getString("name") ?: snapshot.getString("fullName") ?: "Student"
+                val roll = snapshot.getString("rollNumber") ?: ""
+                val room = snapshot.getString("roomNumber") ?: ""
+                val fl = snapshot.getString("floor") ?: ""
+                val ph = snapshot.getString("phone") ?: ""
+                val em = snapshot.getString("email") ?: ""
+                val crs = snapshot.getString("course") ?: "B.Tech"
+                val br = snapshot.getString("branch") ?: "General"
+                val yr = snapshot.getString("year") ?: "1st Year"
+
+                val updatedStudent = _student.value.copy(
+                    id = studentId,
+                    studentId = studentId,
+                    fullName = name,
+                    name = name,
+                    rollNumber = roll,
+                    phoneNumber = ph,
+                    email = em,
+                    course = crs,
+                    branch = br,
+                    year = yr,
+                    hostelId = hostelId,
+                    roomNumber = room,
+                    floorNumber = fl,
+                    isActivated = true
+                )
+                _student.value = updatedStudent
+                setActivatedStudentAndHostel(context, updatedStudent, _hostelInfo.value)
+            }
+
+        // 2. Real-Time Hostel Info Listener
+        hostelListener = firestore.collection("hostels")
+            .document(hostelId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    _hostelError.value = "Unable to load hostel details."
+                    _isHostelLoading.value = false
+                    return@addSnapshotListener
+                }
+                if (snapshot == null || !snapshot.exists()) {
+                    _hostelError.value = "Hostel details not found."
+                    _isHostelLoading.value = false
+                    return@addSnapshotListener
+                }
+
+                val hName = snapshot.getString("name") ?: ""
+                val campus = snapshot.getString("location") ?: snapshot.getString("campus") ?: snapshot.getString("address") ?: ""
+                val addr = snapshot.getString("address") ?: ""
+                val city = snapshot.getString("city") ?: ""
+                val state = snapshot.getString("state") ?: ""
+                val pin = snapshot.getString("pinCode") ?: snapshot.getString("pin") ?: ""
+                val desc = snapshot.getString("description") ?: ""
+                val warden = snapshot.getString("wardenName") ?: ""
+                val floors = (snapshot.getLong("totalFloors") ?: 0L).toInt()
+                val rooms = (snapshot.getLong("totalRooms") ?: 0L).toInt()
+                val students = (snapshot.getLong("totalStudents") ?: 0L).toInt()
+
+                val updatedHostel = HostelInfo(
+                    hostelId = hostelId,
+                    name = hName,
+                    campus = campus,
+                    address = addr,
+                    city = city,
+                    state = state,
+                    pinCode = pin,
+                    description = desc,
+                    totalFloors = floors,
+                    totalRooms = rooms,
+                    totalStudents = students,
+                    wardenName = warden,
+                    contacts = _contacts.value
+                )
+                _hostelInfo.value = updatedHostel
+                _isHostelLoading.value = false
+                _hostelError.value = null
+
+                val updatedStudent = _student.value.copy(hostelName = hName, wardenName = warden)
+                _student.value = updatedStudent
+                setActivatedStudentAndHostel(context, updatedStudent, updatedHostel)
+            }
+
+        // 3. Real-Time Attendance Schedule Listener
+        scheduleListener = firestore.collection("hostels")
+            .document(hostelId)
+            .collection("attendanceSchedule")
+            .document("config")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null || !snapshot.exists()) {
+                    val unconfiguredSched = AttendanceScheduleConfig(
+                        hostelId = hostelId,
+                        isConfigured = false
+                    )
+                    _attendanceSchedule.value = unconfiguredSched
+                    recalculateActiveSessionState(unconfiguredSched)
+                    return@addSnapshotListener
+                }
+
+                val mStart = snapshot.getString("morningStart") ?: ""
+                val mEnd = snapshot.getString("morningEnd") ?: ""
+                val eStart = snapshot.getString("eveningStart") ?: ""
+                val eEnd = snapshot.getString("eveningEnd") ?: ""
+                val tz = snapshot.getString("timezone") ?: "Asia/Kolkata"
+
+                val isConfigured = mStart.isNotBlank() && mEnd.isNotBlank() &&
+                        eStart.isNotBlank() && eEnd.isNotBlank()
+
+                val sched = AttendanceScheduleConfig(
+                    hostelId = hostelId,
+                    morningStart = mStart,
+                    morningEnd = mEnd,
+                    eveningStart = eStart,
+                    eveningEnd = eEnd,
+                    timezone = tz,
+                    isConfigured = isConfigured
+                )
+                _attendanceSchedule.value = sched
+                recalculateActiveSessionState(sched)
+                StudentAttendanceRepository.refreshAttendanceHistory()
+            }
+
+        // 4. Real-Time Notices Listener
+        noticesListener = firestore.collection("hostels")
+            .document(hostelId)
+            .collection("notices")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) {
+                    _isNoticesLoading.value = false
+                    return@addSnapshotListener
+                }
+
+                val tz = TimeZone.getTimeZone("Asia/Kolkata")
+                val dateOnlyFormatter = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).apply {
+                    timeZone = tz
+                }
+
+                val noticeList = snapshot.documents.mapNotNull { doc ->
+                    try {
+                        val isActive = doc.getBoolean("isActive") ?: true
+                        if (!isActive) return@mapNotNull null
+
+                        val id = doc.id
+                        val title = doc.getString("title") ?: ""
+                        val desc = doc.getString("description") ?: doc.getString("message") ?: ""
+                        val category = doc.getString("category") ?: "General"
+                        val createdBy = doc.getString("createdByName") ?: doc.getString("createdBy") ?: "Warden Office"
+                        val priority = doc.getString("priority") ?: "NORMAL"
+                        val timestamp = doc.getTimestamp("createdAt")?.toDate() ?: Date()
+
+                        Notice(
+                            id = id,
+                            noticeId = id,
+                            title = title,
+                            description = desc,
+                            category = category,
+                            dateText = dateOnlyFormatter.format(timestamp),
+                            isUnread = true,
+                            publisher = createdBy,
+                            isActive = true,
+                            priority = priority,
+                            createdAt = timestamp
+                        )
+                    } catch (_: Exception) {
+                        null
+                    }
+                }.sortedByDescending { it.createdAt?.time ?: 0L }
+
+                _notices.value = noticeList
+                _isNoticesLoading.value = false
+                hasLoadedNotices = true
+            }
+
+        // 5. Real-Time Contacts Listener
+        contactsListener = firestore.collection("hostels")
+            .document(hostelId)
+            .collection("contacts")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) {
+                    _isContactsLoading.value = false
+                    return@addSnapshotListener
+                }
+
+                val contactList = snapshot.documents.mapNotNull { doc ->
+                    try {
+                        val isActive = doc.getBoolean("isActive") ?: true
+                        if (!isActive) return@mapNotNull null
+
+                        val id = doc.id
+                        val name = doc.getString("name") ?: ""
+                        val role = doc.getString("role") ?: ""
+                        val dept = doc.getString("department") ?: ""
+                        val phone = doc.getString("phone") ?: doc.getString("phoneNumber") ?: ""
+                        val email = doc.getString("email") ?: ""
+                        val desc = doc.getString("description") ?: ""
+                        val priority = (doc.getLong("priority") ?: 0L).toInt()
+                        val title = doc.getString("title") ?: role.ifBlank { name }
+
+                        ContactInfo(
+                            contactId = id,
+                            title = title,
+                            name = name,
+                            role = role,
+                            department = dept,
+                            phoneNumber = phone,
+                            email = email,
+                            description = desc,
+                            isActive = true,
+                            priority = priority
+                        )
+                    } catch (_: Exception) {
+                        null
+                    }
+                }.sortedBy { it.priority }
+
+                _contacts.value = contactList
+                _hostelInfo.value = _hostelInfo.value.copy(contacts = contactList)
+                _isContactsLoading.value = false
+            }
+
+        // 6. Real-Time Mess Menu Listener
+        messMenuListener = firestore.collection("hostels")
+            .document(hostelId)
+            .collection("messMenus")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) {
+                    _isMessLoading.value = false
+                    return@addSnapshotListener
+                }
+
+                val tz = TimeZone.getTimeZone("Asia/Kolkata")
+                val dateSdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply { timeZone = tz }
+                val displayDateSdf = SimpleDateFormat("EEEE, dd MMMM yyyy", Locale.getDefault()).apply { timeZone = tz }
+                val now = Date()
+                val todayDateStr = dateSdf.format(now)
+                val todayDisplayDateStr = displayDateSdf.format(now)
+
+                val todayDoc = snapshot.documents.firstOrNull { doc ->
+                    val d = doc.getString("date") ?: ""
+                    val published = doc.getBoolean("isPublished") ?: true
+                    d == todayDateStr && published
+                }
+
+                if (todayDoc != null) {
+                    val menuId = todayDoc.id
+                    val breakfastStr = todayDoc.getString("breakfast") ?: ""
+                    val lunchStr = todayDoc.getString("lunch") ?: ""
+                    val snacksStr = todayDoc.getString("snacks") ?: ""
+                    val dinnerStr = todayDoc.getString("dinner") ?: ""
+
+                    val breakfastTime = todayDoc.getString("breakfastTime") ?: "07:30 AM – 09:30 AM"
+                    val lunchTime = todayDoc.getString("lunchTime") ?: "12:30 PM – 02:30 PM"
+                    val snacksTime = todayDoc.getString("snacksTime") ?: "05:00 PM – 06:00 PM"
+                    val dinnerTime = todayDoc.getString("dinnerTime") ?: "08:00 PM – 09:30 PM"
+
+                    val mealsList = mutableListOf<MealItem>()
+
+                    if (breakfastStr.isNotBlank()) {
+                        val items = breakfastStr.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                        mealsList.add(MealItem(category = "Breakfast", timeText = breakfastTime, items = items))
+                    }
+
+                    if (lunchStr.isNotBlank()) {
+                        val items = lunchStr.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                        mealsList.add(MealItem(category = "Lunch", timeText = lunchTime, items = items))
+                    }
+
+                    if (snacksStr.isNotBlank()) {
+                        val items = snacksStr.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                        mealsList.add(MealItem(category = "Evening Snacks", timeText = snacksTime, items = items))
+                    }
+
+                    if (dinnerStr.isNotBlank()) {
+                        val items = dinnerStr.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                        mealsList.add(MealItem(category = "Dinner", timeText = dinnerTime, items = items))
+                    }
+
+                    _messMenu.value = MessDayMenu(
+                        menuId = menuId,
+                        hostelId = hostelId,
+                        date = todayDateStr,
+                        dayName = "Today",
+                        dateText = todayDisplayDateStr,
+                        meals = mealsList,
+                        isPublished = true
+                    )
+                } else {
+                    _messMenu.value = MessDayMenu(
+                        menuId = "",
+                        hostelId = hostelId,
+                        date = todayDateStr,
+                        dayName = "Today",
+                        dateText = todayDisplayDateStr,
+                        meals = emptyList(),
+                        isPublished = false
+                    )
+                }
+                _isMessLoading.value = false
+            }
+
+        // 7. Real-Time Attendance History Listener for Student
+        StudentAttendanceRepository.startAttendanceHistoryListener(hostelId, studentId)
+    }
+
+    fun stopRealtimeListeners() {
+        studentListener?.remove()
+        studentListener = null
+        hostelListener?.remove()
+        hostelListener = null
+        noticesListener?.remove()
+        noticesListener = null
+        contactsListener?.remove()
+        contactsListener = null
+        messMenuListener?.remove()
+        messMenuListener = null
+        scheduleListener?.remove()
+        scheduleListener = null
+        activeHostelId = null
+        activeStudentId = null
+    }
+
+    fun recalculateActiveSessionState(sched: AttendanceScheduleConfig) {
+        _attendanceSchedule.value = sched
+        if (!sched.isConfigured || sched.morningStart.isBlank() || sched.morningEnd.isBlank() ||
+            sched.eveningStart.isBlank() || sched.eveningEnd.isBlank()) {
+            _activeSession.value = null
+            _nextSessionInfo.value = null
+            _hasMarkedCurrentSession.value = false
+            _currentSessionRecord.value = null
+            return
         }
 
-        val updatedStudent = Student(
-            id = "24AIM001",
-            rollNumber = "2024-AI-001",
-            name = "Devesh Dwivedi",
-            hostelName = "Charak Chatras",
-            roomNumber = "214",
-            floorNumber = "2",
-            course = "B.Tech",
-            branch = "Artificial Intelligence",
-            year = "2nd Year",
-            isActivated = true,
-            activationCode = trimmed
-        )
+        val tz = TimeZone.getTimeZone(sched.timezone.ifBlank { "Asia/Kolkata" })
+        val cal = Calendar.getInstance(tz)
+        val currentMins = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+
+        val mStart = parseTimeToMins(sched.morningStart)
+        val mEnd = parseTimeToMins(sched.morningEnd)
+        val eStart = parseTimeToMins(sched.eveningStart)
+        val eEnd = parseTimeToMins(sched.eveningEnd)
+
+        val sessionDateSdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply { timeZone = tz }
+        val displayDateSdf = SimpleDateFormat("d MMM yyyy", Locale.getDefault()).apply { timeZone = tz }
+        val now = Date()
+        val dateStrForId = sessionDateSdf.format(now)
+        val dateStrForDisplay = displayDateSdf.format(now)
+
+        val formattedMStart = formatTime12Hour(sched.morningStart)
+        val formattedMEnd = formatTime12Hour(sched.morningEnd)
+        val formattedEStart = formatTime12Hour(sched.eveningStart)
+        val formattedEEnd = formatTime12Hour(sched.eveningEnd)
+
+        when {
+            currentMins in mStart until mEnd -> {
+                val sess = AttendanceSession(
+                    id = "${dateStrForId}_MORNING",
+                    sessionType = AttendanceSessionType.MORNING,
+                    title = "Morning Attendance",
+                    hostelName = _hostelInfo.value.name,
+                    dateText = dateStrForDisplay,
+                    startTimeText = formattedMStart,
+                    endTimeText = formattedMEnd,
+                    status = SessionStatus.ACTIVE,
+                    cutoffTimeText = formattedMEnd
+                )
+                _activeSession.value = sess
+                _nextSessionInfo.value = NextSessionInfo(
+                    sessionType = AttendanceSessionType.EVENING,
+                    title = "Evening Attendance",
+                    timeRangeText = "$formattedEStart – $formattedEEnd"
+                )
+                checkIfAlreadyMarked(sess.id)
+            }
+            currentMins in eStart until eEnd -> {
+                val sess = AttendanceSession(
+                    id = "${dateStrForId}_EVENING",
+                    sessionType = AttendanceSessionType.EVENING,
+                    title = "Evening Attendance",
+                    hostelName = _hostelInfo.value.name,
+                    dateText = dateStrForDisplay,
+                    startTimeText = formattedEStart,
+                    endTimeText = formattedEEnd,
+                    status = SessionStatus.ACTIVE,
+                    cutoffTimeText = formattedEEnd
+                )
+                _activeSession.value = sess
+                _nextSessionInfo.value = NextSessionInfo(
+                    sessionType = AttendanceSessionType.MORNING,
+                    title = "Morning Attendance (Tomorrow)",
+                    timeRangeText = "$formattedMStart – $formattedMEnd"
+                )
+                checkIfAlreadyMarked(sess.id)
+            }
+            else -> {
+                _activeSession.value = null
+                _hasMarkedCurrentSession.value = false
+                _currentSessionRecord.value = null
+
+                val nextInfo = if (currentMins < mStart) {
+                    NextSessionInfo(
+                        sessionType = AttendanceSessionType.MORNING,
+                        title = "Morning Attendance",
+                        timeRangeText = "$formattedMStart – $formattedMEnd"
+                    )
+                } else if (currentMins < eStart) {
+                    NextSessionInfo(
+                        sessionType = AttendanceSessionType.EVENING,
+                        title = "Evening Attendance",
+                        timeRangeText = "$formattedEStart – $formattedEEnd"
+                    )
+                } else {
+                    NextSessionInfo(
+                        sessionType = AttendanceSessionType.MORNING,
+                        title = "Morning Attendance (Tomorrow)",
+                        timeRangeText = "$formattedMStart – $formattedMEnd"
+                    )
+                }
+                _nextSessionInfo.value = nextInfo
+            }
+        }
+    }
+
+    private fun checkIfAlreadyMarked(sessionId: String) {
+        if (sessionId.isBlank()) {
+            _hasMarkedCurrentSession.value = false
+            _currentSessionRecord.value = null
+            return
+        }
+        val record = _attendanceHistory.value.firstOrNull {
+            it.sessionId == sessionId && (it.status == AttendanceStatus.PRESENT || it.status == AttendanceStatus.ABSENT)
+        }
+        if (record != null) {
+            _hasMarkedCurrentSession.value = true
+            _currentSessionRecord.value = record
+        } else {
+            _hasMarkedCurrentSession.value = false
+            _currentSessionRecord.value = null
+        }
+    }
+
+    fun setActivatedStudentAndHostel(context: Context, updatedStudent: Student, updatedHostelInfo: HostelInfo) {
         _student.value = updatedStudent
+        _hostelInfo.value = updatedHostelInfo
 
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit()
             .putBoolean(KEY_IS_ACTIVATED, true)
             .putString(KEY_STUDENT_ID, updatedStudent.id)
             .putString(KEY_STUDENT_NAME, updatedStudent.name)
+            .putString(KEY_ROLL_NUMBER, updatedStudent.rollNumber)
+            .putString(KEY_HOSTEL_ID, updatedStudent.hostelId)
             .putString(KEY_HOSTEL_NAME, updatedStudent.hostelName)
+            .putString(KEY_CAMPUS, updatedHostelInfo.campus)
+            .putString(KEY_ADDRESS, updatedHostelInfo.address)
             .putString(KEY_ROOM_NUMBER, updatedStudent.roomNumber)
             .putString(KEY_FLOOR_NUMBER, updatedStudent.floorNumber)
+            .putString(KEY_COURSE, updatedStudent.course)
+            .putString(KEY_BRANCH, updatedStudent.branch)
+            .putString(KEY_YEAR, updatedStudent.year)
+            .putString(KEY_WARDEN_NAME, updatedStudent.wardenName)
             .apply()
-
-        return ActivationResult.SUCCESS
     }
 
-    // Toggle active session for testing/demo state (Cycles between Morning Active, Evening Active, and None)
-    private var demoCycleIndex = 0
+    fun setHistoryLoading(loading: Boolean) {
+        _isHistoryLoading.value = loading
+    }
 
-    fun cycleActiveSessionState() {
-        demoCycleIndex = (demoCycleIndex + 1) % 3
-        _hasMarkedCurrentSession.value = false
+    fun setHistoryError(error: String?) {
+        _historyError.value = error
+        _isHistoryLoading.value = false
+    }
 
-        _activeSession.value = when (demoCycleIndex) {
-            1 -> AttendanceSession(
-                id = "SESS_ACTIVE_MORNING",
-                sessionType = AttendanceSessionType.MORNING,
-                title = "Morning Attendance",
-                hostelName = "Charak Chatras",
-                dateText = "2 Oct 2026",
-                startTimeText = "07:00 AM",
-                endTimeText = "09:00 AM",
-                status = SessionStatus.ACTIVE,
-                cutoffTimeText = "09:00 AM"
-            )
-            2 -> AttendanceSession(
-                id = "SESS_ACTIVE_EVENING",
-                sessionType = AttendanceSessionType.EVENING,
-                title = "Evening Attendance",
-                hostelName = "Charak Chatras",
-                dateText = "2 Oct 2026",
-                startTimeText = "08:00 PM",
-                endTimeText = "10:30 PM",
-                status = SessionStatus.ACTIVE,
-                cutoffTimeText = "10:30 PM"
-            )
-            else -> null
+    fun updateAttendanceHistory(records: List<AttendanceRecord>) {
+        _attendanceHistory.value = records
+        _isHistoryLoading.value = false
+        _historyError.value = null
+        val active = _activeSession.value
+        if (active != null) {
+            checkIfAlreadyMarked(active.id)
         }
     }
 
-    // Student marks presence
-    fun markAttendance(): Boolean {
-        val session = _activeSession.value ?: return false
-        if (_hasMarkedCurrentSession.value) return false
-
-        _hasMarkedCurrentSession.value = true
-        val markTime = if (session.sessionType == AttendanceSessionType.MORNING) "07:42 AM" else "08:12 PM"
-        val newRecord = AttendanceRecord(
-            id = "REC_${System.currentTimeMillis()}",
-            sessionId = session.id,
-            sessionType = session.sessionType,
-            title = session.title,
-            dateTimeText = "${session.dateText} • $markTime",
-            dateText = session.dateText,
-            timeText = markTime,
-            monthYearText = "October 2026",
-            status = AttendanceStatus.PRESENT
-        )
-        _attendanceHistory.value = listOf(newRecord) + _attendanceHistory.value
-        return true
+    fun setHasMarkedCurrentSession(hasMarked: Boolean) {
+        _hasMarkedCurrentSession.value = hasMarked
+        val active = _activeSession.value
+        if (active != null) {
+            checkIfAlreadyMarked(active.id)
+        }
     }
 
-    // Mark notice as read
     fun markNoticeRead(noticeId: String) {
         _notices.value = _notices.value.map { notice ->
             if (notice.id == noticeId) notice.copy(isUnread = false) else notice
         }
     }
 
-    // Settings actions
-    fun setAttendanceReminders(enabled: Boolean) { _attendanceRemindersEnabled.value = enabled }
-    fun setNoticeAlerts(enabled: Boolean) { _noticeAlertsEnabled.value = enabled }
-    fun setAnnouncements(enabled: Boolean) { _announcementsEnabled.value = enabled }
-    fun setAppearancePreference(pref: String) { _appearancePreference.value = pref }
+    fun setAttendanceReminders(context: Context?, enabled: Boolean) {
+        StudentNotificationPreferences.setAttendanceReminders(context, enabled)
+        StudentFcmManager.syncNotificationPreferencesToServer(
+            attendanceReminders = enabled,
+            hostelNotices = noticeAlertsEnabled.value,
+            importantAnnouncements = announcementsEnabled.value
+        )
+    }
+    fun setAttendanceReminders(enabled: Boolean) {
+        setAttendanceReminders(appContext, enabled)
+    }
+
+    fun setNoticeAlerts(context: Context?, enabled: Boolean) {
+        StudentNotificationPreferences.setHostelNotices(context, enabled)
+        StudentFcmManager.syncNotificationPreferencesToServer(
+            attendanceReminders = attendanceRemindersEnabled.value,
+            hostelNotices = enabled,
+            importantAnnouncements = announcementsEnabled.value
+        )
+    }
+    fun setNoticeAlerts(enabled: Boolean) {
+        setNoticeAlerts(appContext, enabled)
+    }
+
+    fun setAnnouncements(context: Context?, enabled: Boolean) {
+        StudentNotificationPreferences.setImportantAnnouncements(context, enabled)
+        StudentFcmManager.syncNotificationPreferencesToServer(
+            attendanceReminders = attendanceRemindersEnabled.value,
+            hostelNotices = noticeAlertsEnabled.value,
+            importantAnnouncements = enabled
+        )
+    }
+    fun setAnnouncements(enabled: Boolean) {
+        setAnnouncements(appContext, enabled)
+    }
+    fun setAppearancePreference(context: Context, pref: String) {
+        _appearancePreference.value = pref
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_APPEARANCE_PREFERENCE, pref).apply()
+    }
+    fun setAppearancePreference(pref: String) {
+        _appearancePreference.value = pref
+    }
 
     fun signOut(context: Context) {
+        stopRealtimeListeners()
         _student.value = Student(isActivated = false)
+        _hostelInfo.value = HostelInfo()
         _activeSession.value = null
+        _nextSessionInfo.value = null
         _hasMarkedCurrentSession.value = false
+        _currentSessionRecord.value = null
+        _attendanceHistory.value = emptyList()
+        _notices.value = emptyList()
+        _contacts.value = emptyList()
+        _messMenu.value = MessDayMenu(isPublished = false)
 
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().clear().apply()
+        prefs.edit()
+            .remove(KEY_IS_ACTIVATED)
+            .remove(KEY_STUDENT_ID)
+            .remove(KEY_STUDENT_NAME)
+            .remove(KEY_ROLL_NUMBER)
+            .remove(KEY_HOSTEL_ID)
+            .remove(KEY_HOSTEL_NAME)
+            .remove(KEY_CAMPUS)
+            .remove(KEY_ADDRESS)
+            .remove(KEY_ROOM_NUMBER)
+            .remove(KEY_FLOOR_NUMBER)
+            .remove(KEY_COURSE)
+            .remove(KEY_BRANCH)
+            .remove(KEY_YEAR)
+            .remove(KEY_WARDEN_NAME)
+            .apply()
+
+        FirebaseAuth.getInstance().signOut()
+    }
+
+    private fun parseTimeToMins(timeStr: String): Int {
+        val parts = timeStr.trim().split(":")
+        val h = parts.getOrNull(0)?.toIntOrNull() ?: 0
+        val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        return h * 60 + m
+    }
+
+    fun formatTime12Hour(time24: String): String {
+        if (time24.isBlank()) return ""
+        return try {
+            val parts = time24.trim().split(":")
+            if (parts.size >= 2) {
+                val hours = parts[0].toInt()
+                val minutes = parts[1].toInt()
+                val amPm = if (hours >= 12) "PM" else "AM"
+                val hour12 = when (hours % 12) {
+                    0 -> 12
+                    else -> hours % 12
+                }
+                String.format(Locale.US, "%02d:%02d %s", hour12, minutes, amPm)
+            } else {
+                time24
+            }
+        } catch (e: Exception) {
+            time24
+        }
     }
 }
