@@ -35,8 +35,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
 import com.veda.vedahostelstudents.data.model.AttendanceSession
 import com.veda.vedahostelstudents.data.model.AttendanceSessionType
+import com.veda.vedahostelstudents.data.model.AttendanceStatus
+import com.veda.vedahostelstudents.ui.theme.VedaAlertRed
 import com.veda.vedahostelstudents.ui.theme.VedaBrightBlue
 import com.veda.vedahostelstudents.ui.theme.VedaDarkBackground
 import com.veda.vedahostelstudents.ui.theme.VedaDarkSurface
@@ -49,7 +53,7 @@ import com.veda.vedahostelstudents.ui.theme.VedaTextPrimary
 fun MarkAttendanceScreen(
     session: AttendanceSession,
     onBack: () -> Unit,
-    onMarkPresence: () -> Unit
+    onMarkAttendance: (AttendanceStatus) -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -188,27 +192,66 @@ fun MarkAttendanceScreen(
                 }
             }
 
-            // Bottom Mark Button & Disclaimer
+            // Bottom Mark Buttons & Disclaimer
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Button(
-                    onClick = onMarkPresence,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = VedaBrightBlue,
-                        contentColor = VedaTextPrimary
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(
-                        text = "Mark My Presence",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Button(
+                        onClick = { onMarkAttendance(AttendanceStatus.PRESENT) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = VedaSuccessGreen,
+                            contentColor = VedaTextPrimary
+                        )
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.CheckCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Mark Present",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = { onMarkAttendance(AttendanceStatus.ABSENT) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = VedaAlertRed,
+                            contentColor = VedaTextPrimary
+                        )
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.Cancel,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Mark Absent",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))

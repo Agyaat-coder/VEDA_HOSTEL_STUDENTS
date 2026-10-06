@@ -12,29 +12,30 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.veda.vedahostelstudents.ui.theme.VedaBrightBlue
-import com.veda.vedahostelstudents.ui.theme.VedaDarkBackground
-import com.veda.vedahostelstudents.ui.theme.VedaDarkSurface
-import com.veda.vedahostelstudents.ui.theme.VedaPrimaryBlue
-import com.veda.vedahostelstudents.ui.theme.VedaTextMuted
-import com.veda.vedahostelstudents.ui.theme.VedaTextPrimary
+import com.veda.vedahostelstudents.ui.components.VedaCard
+import com.veda.vedahostelstudents.ui.components.VedaIconButton
+import com.veda.vedahostelstudents.ui.theme.VedaAccentSoft
+import com.veda.vedahostelstudents.ui.theme.VedaBorder
+import com.veda.vedahostelstudents.ui.theme.VedaCanvas
+import com.veda.vedahostelstudents.ui.theme.VedaInk
+import com.veda.vedahostelstudents.ui.theme.VedaMuted
+import com.veda.vedahostelstudents.ui.theme.VedaPrimary
+import com.veda.vedahostelstudents.ui.theme.VedaShapesInstance
+import com.veda.vedahostelstudents.ui.theme.VedaSpacingInstance
+import com.veda.vedahostelstudents.ui.theme.VedaSurface
+import com.veda.vedahostelstudents.ui.theme.VedaTheme
 
 @Composable
 fun AboutVedaScreen(
@@ -43,97 +44,95 @@ fun AboutVedaScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(VedaDarkBackground)
-            .padding(20.dp),
+            .background(VedaCanvas)
+            .padding(horizontal = VedaSpacingInstance.screenPaddingHorizontal),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Top Nav Bar
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.xs))
+
+        // Top Nav Bar Header
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp)
+                .padding(vertical = VedaSpacingInstance.sm)
         ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = VedaTextPrimary
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
+            VedaIconButton(
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                onClick = onBack,
+                tint = VedaInk
+            )
+            Spacer(modifier = Modifier.width(VedaSpacingInstance.xs))
             Text(
                 text = "About VEDA",
-                fontSize = 20.sp,
+                style = VedaTheme.typography.screenTitle,
                 fontWeight = FontWeight.Bold,
-                color = VedaTextPrimary
+                color = VedaInk
             )
         }
 
-        Spacer(modifier = Modifier.height(36.dp))
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.xl))
 
         // VEDA Emblem
         Box(
             modifier = Modifier
                 .size(80.dp)
                 .clip(CircleShape)
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = listOf(VedaPrimaryBlue, VedaBrightBlue)
-                    )
-                ),
+                .background(VedaAccentSoft),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Filled.Shield,
                 contentDescription = "VEDA Logo",
-                tint = VedaTextPrimary,
+                tint = VedaPrimary,
                 modifier = Modifier.size(44.dp)
             )
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.md))
 
         Text(
             text = "VEDA Hostel Students",
-            fontSize = 22.sp,
+            style = VedaTheme.typography.screenTitle,
             fontWeight = FontWeight.Bold,
-            color = VedaTextPrimary
+            color = VedaInk
         )
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(2.dp))
 
         Text(
             text = "Version 1.0.0",
-            fontSize = 13.sp,
+            style = VedaTheme.typography.bodySecondary,
             fontWeight = FontWeight.Medium,
-            color = VedaBrightBlue
+            color = VedaPrimary
         )
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.xl))
 
-        Surface(
+        VedaCard(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            color = VedaDarkSurface
+            backgroundColor = VedaSurface,
+            borderColor = VedaBorder,
+            shape = VedaShapesInstance.large,
+            contentPadding = VedaSpacingInstance.cardPadding
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = "Your Hostel • Your Everyday Companion",
-                    fontSize = 14.sp,
+                    style = VedaTheme.typography.body,
                     fontWeight = FontWeight.Bold,
-                    color = VedaTextPrimary
+                    color = VedaInk,
+                    textAlign = TextAlign.Center
                 )
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(VedaSpacingInstance.sm))
                 Text(
                     text = "VEDA Hostel Students is the official student-side companion application designed to streamline daily hostel attendance, warden broadcasts, notices, mess menus, and hostel information.",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = VedaTextMuted,
-                    lineHeight = 18.sp,
+                    style = VedaTheme.typography.bodySecondary,
+                    color = VedaMuted,
                     textAlign = TextAlign.Center
                 )
             }

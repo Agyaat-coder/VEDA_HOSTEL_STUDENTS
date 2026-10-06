@@ -11,83 +11,92 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.veda.vedahostelstudents.data.model.Student
-import com.veda.vedahostelstudents.ui.theme.VedaDarkBackground
-import com.veda.vedahostelstudents.ui.theme.VedaDarkSurface
-import com.veda.vedahostelstudents.ui.theme.VedaTextMuted
-import com.veda.vedahostelstudents.ui.theme.VedaTextPrimary
+import com.veda.vedahostelstudents.ui.components.VedaCard
+import com.veda.vedahostelstudents.ui.components.VedaIconButton
+import com.veda.vedahostelstudents.ui.theme.VedaBorder
+import com.veda.vedahostelstudents.ui.theme.VedaCanvas
+import com.veda.vedahostelstudents.ui.theme.VedaInk
+import com.veda.vedahostelstudents.ui.theme.VedaMuted
+import com.veda.vedahostelstudents.ui.theme.VedaShapesInstance
+import com.veda.vedahostelstudents.ui.theme.VedaSpacingInstance
+import com.veda.vedahostelstudents.ui.theme.VedaSurface
+import com.veda.vedahostelstudents.ui.theme.VedaTheme
 
 @Composable
 fun AccountDetailsScreen(
     student: Student,
     onBack: () -> Unit
 ) {
+    val displayName = student.fullName.ifBlank { student.name }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(VedaDarkBackground)
-            .padding(20.dp)
+            .background(VedaCanvas)
+            .padding(horizontal = VedaSpacingInstance.screenPaddingHorizontal)
     ) {
-        // Top Nav Bar
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.xs))
+
+        // Top Nav Bar Header
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(top = 12.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = VedaSpacingInstance.sm)
         ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = VedaTextPrimary
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
+            VedaIconButton(
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                onClick = onBack,
+                tint = VedaInk
+            )
+            Spacer(modifier = Modifier.width(VedaSpacingInstance.xs))
             Text(
                 text = "Account Details",
-                fontSize = 20.sp,
+                style = VedaTheme.typography.screenTitle,
                 fontWeight = FontWeight.Bold,
-                color = VedaTextPrimary
+                color = VedaInk
             )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.md))
 
         // Student Info Cards List
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(VedaSpacingInstance.listSpacing)
         ) {
             item {
-                Surface(
+                VedaCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    color = VedaDarkSurface
+                    backgroundColor = VedaSurface,
+                    borderColor = VedaBorder,
+                    shape = VedaShapesInstance.large,
+                    contentPadding = VedaSpacingInstance.cardPadding
                 ) {
                     Column(
-                        modifier = Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(VedaSpacingInstance.md)
                     ) {
-                        DetailFieldRow(label = "Student ID", value = student.id)
-                        DetailFieldRow(label = "Roll Number", value = student.rollNumber)
-                        DetailFieldRow(label = "Full Name", value = student.name)
-                        DetailFieldRow(label = "Course", value = student.course)
-                        DetailFieldRow(label = "Branch", value = student.branch)
-                        DetailFieldRow(label = "Year", value = student.year)
-                        DetailFieldRow(label = "Hostel", value = student.hostelName)
-                        DetailFieldRow(label = "Room Number", value = student.roomNumber)
-                        DetailFieldRow(label = "Floor", value = "Floor ${student.floorNumber}")
+                        DetailFieldRow(label = "Student ID", value = student.studentId.ifBlank { student.id.ifBlank { "Not available" } })
+                        DetailFieldRow(label = "Roll Number", value = student.rollNumber.ifBlank { "Not available" })
+                        DetailFieldRow(label = "Full Name", value = displayName.ifBlank { "Not available" })
+                        DetailFieldRow(label = "Email", value = student.email.ifBlank { "Not available" })
+                        DetailFieldRow(label = "Phone", value = student.phoneNumber.ifBlank { "Not available" })
+                        DetailFieldRow(label = "Course", value = student.course.ifBlank { "Not available" })
+                        DetailFieldRow(label = "Branch", value = student.branch.ifBlank { "Not available" })
+                        DetailFieldRow(label = "Year", value = student.year.ifBlank { "Not available" })
+                        DetailFieldRow(label = "Hostel", value = student.hostelName.ifBlank { "Not available" })
+                        DetailFieldRow(label = "Room Number", value = if (student.roomNumber.isNotBlank()) "Room ${student.roomNumber}" else "Not available")
+                        DetailFieldRow(label = "Floor", value = if (student.floorNumber.isNotBlank()) "Floor ${student.floorNumber}" else "Not available")
                     }
                 }
             }
@@ -95,11 +104,14 @@ fun AccountDetailsScreen(
             item {
                 Text(
                     text = "🔒 Administrative student details are read-only and maintained by Warden administration.",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = VedaTextMuted,
-                    modifier = Modifier.padding(horizontal = 8.dp)
+                    style = VedaTheme.typography.caption,
+                    color = VedaMuted,
+                    modifier = Modifier.padding(horizontal = VedaSpacingInstance.xs)
                 )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(VedaSpacingInstance.xl))
             }
         }
     }
@@ -117,15 +129,14 @@ private fun DetailFieldRow(
     ) {
         Text(
             text = label,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            color = VedaTextMuted
+            style = VedaTheme.typography.caption,
+            color = VedaMuted
         )
         Text(
             text = value,
-            fontSize = 14.sp,
+            style = VedaTheme.typography.bodySecondary,
             fontWeight = FontWeight.Bold,
-            color = VedaTextPrimary
+            color = VedaInk
         )
     }
 }

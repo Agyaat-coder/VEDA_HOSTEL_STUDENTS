@@ -8,10 +8,10 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="PLACEHOLDER" />
-                  <option name="mobileSdkAppId" value="" />
-                  <option name="projectId" value="" />
-                  <option name="projectNumber" value="" />
+                  <option name="appId" value="com.veda.vedahostelstudent" />
+                  <option name="mobileSdkAppId" value="1:907201138567:android:5593b2da66b0e0a9604d22" />
+                  <option name="projectId" value="veda-hostel-33268" />
+                  <option name="projectNumber" value="907201138567" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />

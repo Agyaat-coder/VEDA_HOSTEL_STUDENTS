@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -31,7 +32,7 @@ fun CodeInputField(
     code: String,
     onCodeChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    maxLength: Int = 6
+    maxLength: Int = 10
 ) {
     BasicTextField(
         value = code,
@@ -46,7 +47,7 @@ fun CodeInputField(
         decorationBox = {
             Row(
                 modifier = modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 repeat(maxLength) { index ->
@@ -56,19 +57,19 @@ fun CodeInputField(
 
                     Box(
                         modifier = Modifier
-                            .size(48.dp, 56.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .width(28.dp)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(8.dp))
                             .border(
                                 width = if (isFocused) 2.dp else 1.dp,
                                 color = borderColor,
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            .height(56.dp),
+                                shape = RoundedCornerShape(8.dp)
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = char,
-                            fontSize = 20.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (char.isNotEmpty()) VedaTextPrimary else VedaTextMuted,
                             textAlign = TextAlign.Center

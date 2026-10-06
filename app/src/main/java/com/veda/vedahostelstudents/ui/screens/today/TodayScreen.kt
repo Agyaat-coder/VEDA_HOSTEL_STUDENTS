@@ -1,5 +1,6 @@
 package com.veda.vedahostelstudents.ui.screens.today
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,338 +15,422 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.CorporateFare
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.veda.vedahostelstudents.data.model.AttendanceRecord
 import com.veda.vedahostelstudents.data.model.AttendanceSession
 import com.veda.vedahostelstudents.data.model.AttendanceSessionType
+import com.veda.vedahostelstudents.data.model.AttendanceStatus
 import com.veda.vedahostelstudents.data.model.Student
+import com.veda.vedahostelstudents.data.repository.AttendanceScheduleConfig
+import com.veda.vedahostelstudents.data.repository.NextSessionInfo
+import com.veda.vedahostelstudents.data.repository.StudentAttendanceRepository
 import com.veda.vedahostelstudents.ui.components.QuickAccessCard
+import com.veda.vedahostelstudents.ui.components.VedaCard
+import com.veda.vedahostelstudents.ui.components.VedaIconButton
+import com.veda.vedahostelstudents.ui.components.VedaSectionHeader
+import com.veda.vedahostelstudents.ui.components.VedaStatusBadge
+import com.veda.vedahostelstudents.ui.components.VedaStatusStyle
 import com.veda.vedahostelstudents.ui.theme.VEDAHOSTELSTUDENTSTheme
-import com.veda.vedahostelstudents.ui.theme.VedaAlertRed
-import com.veda.vedahostelstudents.ui.theme.VedaBrightBlue
-import com.veda.vedahostelstudents.ui.theme.VedaDarkBackground
-import com.veda.vedahostelstudents.ui.theme.VedaDarkSurface
-import com.veda.vedahostelstudents.ui.theme.VedaSuccessGreen
-import com.veda.vedahostelstudents.ui.theme.VedaTextMuted
-import com.veda.vedahostelstudents.ui.theme.VedaTextPrimary
+import com.veda.vedahostelstudents.ui.theme.VedaAbsent
+import com.veda.vedahostelstudents.ui.theme.VedaAbsentSoft
+import com.veda.vedahostelstudents.ui.theme.VedaBorder
+import com.veda.vedahostelstudents.ui.theme.VedaCanvas
+import com.veda.vedahostelstudents.ui.theme.VedaInk
+import com.veda.vedahostelstudents.ui.theme.VedaMuted
+import com.veda.vedahostelstudents.ui.theme.VedaPresent
+import com.veda.vedahostelstudents.ui.theme.VedaPrimary
+import com.veda.vedahostelstudents.ui.theme.VedaShapesInstance
+import com.veda.vedahostelstudents.ui.theme.VedaSpacingInstance
+import com.veda.vedahostelstudents.ui.theme.VedaSurface
+import com.veda.vedahostelstudents.ui.theme.VedaTheme
+import kotlinx.coroutines.launch
+import java.util.Calendar
 
 @Composable
 fun TodayScreen(
     student: Student,
     activeSession: AttendanceSession?,
+    nextSessionInfo: NextSessionInfo?,
+    schedule: AttendanceScheduleConfig,
     hasMarkedCurrentSession: Boolean,
+    currentSessionRecord: AttendanceRecord?,
     unreadNoticesCount: Int,
-    onMarkPresentClick: () -> Unit,
     onNoticesClick: () -> Unit,
     onMessMenuClick: () -> Unit,
+    onContactsClick: () -> Unit = {},
     onHostelInfoClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isMarkingAttendance by remember { mutableStateOf(false) }
+    var markingStatus by remember { mutableStateOf<AttendanceStatus?>(null) }
+    var showConfirmAbsentDialog by remember { mutableStateOf(false) }
+
+    val hourOfDay = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+    val greetingPrefix = when (hourOfDay) {
+        in 4..11 -> "Good morning,"
+        in 12..16 -> "Good afternoon,"
+        else -> "Good evening,"
+    }
+
+    val firstName = student.fullName.trim().split("\\s+".toRegex()).firstOrNull()?.takeIf { it.isNotBlank() }
+        ?: student.name.trim().split("\\s+".toRegex()).firstOrNull()?.takeIf { it.isNotBlank() }
+
+    val greetingText = if (firstName.isNullOrBlank()) {
+        "Welcome 👋"
+    } else {
+        "$firstName 👋"
+    }
+
+    val roomHostelText = if (student.roomNumber.isNotBlank() && student.hostelName.isNotBlank()) {
+        "Room ${student.roomNumber} • ${student.hostelName}"
+    } else if (student.hostelName.isNotBlank()) {
+        student.hostelName
+    } else {
+        "Hostel Student"
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(VedaDarkBackground)
+            .background(VedaCanvas)
             .verticalScroll(rememberScrollState())
-            .padding(20.dp)
+            .padding(horizontal = VedaSpacingInstance.screenPaddingHorizontal)
     ) {
-        // Top Bar: Student Name & Room + Notification Bell
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.xs))
+
+        // Top Greeting Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp, bottom = 20.dp),
+                .padding(vertical = VedaSpacingInstance.sm),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Good morning,",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = VedaTextMuted
+                    text = greetingPrefix,
+                    style = VedaTheme.typography.bodySecondary,
+                    color = VedaMuted
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "${student.fullName.split(" ").firstOrNull() ?: student.fullName} 👋",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = VedaTextPrimary
+                    text = greetingText,
+                    style = VedaTheme.typography.screenTitle,
+                    color = VedaInk
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Filled.CorporateFare,
                         contentDescription = "Room",
-                        tint = VedaBrightBlue,
+                        tint = VedaPrimary,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Room ${student.roomNumber}  •  ${student.hostelName}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = VedaBrightBlue
+                        text = roomHostelText,
+                        style = VedaTheme.typography.caption,
+                        color = VedaPrimary
                     )
                 }
             }
 
             Box {
-                IconButton(
+                VedaIconButton(
+                    icon = Icons.Filled.NotificationsNone,
+                    contentDescription = "Notifications",
                     onClick = onNoticesClick,
+                    tint = VedaInk,
                     modifier = Modifier
                         .size(44.dp)
                         .clip(CircleShape)
-                        .background(VedaDarkSurface)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.NotificationsNone,
-                        contentDescription = "Notifications",
-                        tint = VedaTextPrimary
-                    )
-                }
+                        .background(VedaSurface)
+                )
                 if (unreadNoticesCount > 0) {
                     Box(
                         modifier = Modifier
+                            .padding(end = 4.dp, top = 4.dp)
                             .size(10.dp)
                             .clip(CircleShape)
-                            .background(VedaBrightBlue)
+                            .background(VedaPrimary)
                             .align(Alignment.TopEnd)
                     )
                 }
             }
         }
 
-        // Main Attendance Card Dynamic State
-        if (activeSession != null) {
-            if (!hasMarkedCurrentSession) {
-                // ACTIVE ATTENDANCE OPEN CARD (MORNING OR EVENING)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    VedaAlertRed.copy(alpha = 0.95f),
-                                    VedaAlertRed.copy(alpha = 0.75f)
-                                )
-                            )
-                        )
-                        .padding(20.dp)
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.lg))
+
+        // VEDA ATTENDANCE PULSE CARD (5 CANONICAL STATES - PAGES 42-45)
+        VedaCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = VedaSurface,
+            borderColor = VedaBorder,
+            shape = VedaShapesInstance.card,
+            contentPadding = VedaSpacingInstance.cardPadding
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                val sessionTitle = (activeSession?.title ?: nextSessionInfo?.title ?: "EVENING ATTENDANCE").uppercase()
+                val sessionTimes = activeSession?.let { "${it.startTimeText} - ${it.endTimeText}" }
+                    ?: nextSessionInfo?.timeRangeText
+                    ?: "05:55 PM - 06:00 PM"
+
+                // Overline Session Title & Time Range
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Text(
+                        text = sessionTitle,
+                        style = VedaTheme.typography.caption,
+                        color = VedaPrimary
+                    )
+                    Text(
+                        text = sessionTimes,
+                        style = VedaTheme.typography.caption,
+                        color = VedaMuted
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(VedaSpacingInstance.sm))
+
+                when {
+                    // STATE 1: ACTIVE SESSION - NOT MARKED
+                    activeSession != null && !hasMarkedCurrentSession -> {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(VedaTextPrimary.copy(alpha = 0.2f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
+                            VedaStatusBadge(
+                                text = "NOT MARKED",
+                                style = VedaStatusStyle.NOT_MARKED
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(VedaSpacingInstance.sm))
+
+                        Text(
+                            text = "Attendance not marked",
+                            style = VedaTheme.typography.sectionTitle,
+                            color = VedaInk
+                        )
+
+                        Spacer(modifier = Modifier.height(2.dp))
+
+                        Text(
+                            text = "You haven't marked your attendance yet.",
+                            style = VedaTheme.typography.bodySecondary,
+                            color = VedaMuted
+                        )
+
+                        Spacer(modifier = Modifier.height(VedaSpacingInstance.lg))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(VedaSpacingInstance.sm)
+                        ) {
+                            Button(
+                                onClick = {
+                                    if (isMarkingAttendance) return@Button
+                                    isMarkingAttendance = true
+                                    markingStatus = AttendanceStatus.PRESENT
+                                    scope.launch {
+                                        val result = StudentAttendanceRepository.markAttendance(context, AttendanceStatus.PRESENT)
+                                        isMarkingAttendance = false
+                                        result.onSuccess {
+                                            Toast.makeText(context, "Attendance Marked: PRESENT", Toast.LENGTH_SHORT).show()
+                                        }.onFailure { err ->
+                                            Toast.makeText(context, err.message ?: "Failed to mark attendance", Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                },
+                                enabled = !isMarkingAttendance,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                shape = VedaShapesInstance.button,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = VedaPresent,
+                                    contentColor = VedaSurface
+                                )
+                            ) {
+                                if (isMarkingAttendance && markingStatus == AttendanceStatus.PRESENT) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        color = VedaSurface,
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Filled.CheckCircle,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "MARK PRESENT",
+                                            style = VedaTheme.typography.caption
+                                        )
+                                    }
+                                }
+                            }
+
+                            Button(
+                                onClick = { showConfirmAbsentDialog = true },
+                                enabled = !isMarkingAttendance,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                shape = VedaShapesInstance.button,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = VedaAbsentSoft,
+                                    contentColor = VedaAbsent
+                                )
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        imageVector = Icons.Filled.Notifications,
-                                        contentDescription = "Alert",
-                                        tint = VedaTextPrimary,
-                                        modifier = Modifier.size(20.dp)
+                                        imageVector = Icons.Filled.Cancel,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "MARK ABSENT",
+                                        style = VedaTheme.typography.caption
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = "${activeSession.title} is open",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = VedaTextPrimary
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Text(
-                            text = "Please mark your presence before ${activeSession.cutoffTimeText}.",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = VedaTextPrimary.copy(alpha = 0.9f)
-                        )
-
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        Button(
-                            onClick = onMarkPresentClick,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = VedaTextPrimary,
-                                contentColor = VedaAlertRed
-                            )
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Text(
-                                    text = "Mark Present",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                    contentDescription = "Mark Present",
-                                    modifier = Modifier.size(18.dp)
-                                )
                             }
                         }
                     }
-                }
-            } else {
-                // RECORDED FOR THIS SESSION CARD
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    color = VedaDarkSurface
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(VedaSuccessGreen.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.CheckCircle,
-                                contentDescription = "Recorded",
-                                tint = VedaSuccessGreen,
-                                modifier = Modifier.size(32.dp)
+
+                    // STATE 2 & 3: ATTENDANCE MARKED (PRESENT / ABSENT)
+                    activeSession != null && hasMarkedCurrentSession -> {
+                        val isPresent = currentSessionRecord?.status == AttendanceStatus.PRESENT
+                        val badgeText = if (isPresent) "✔ PRESENT" else "✖ ABSENT"
+                        val badgeStyle = if (isPresent) VedaStatusStyle.PRESENT else VedaStatusStyle.ABSENT
+                        val timeRecordedText = currentSessionRecord?.timeText?.ifBlank { "05:58 PM" } ?: "05:58 PM"
+                        val dateRecordedText = currentSessionRecord?.dateText?.ifBlank { "05 Oct 2026" } ?: "05 Oct 2026"
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            VedaStatusBadge(
+                                text = badgeText,
+                                style = badgeStyle
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.height(VedaSpacingInstance.sm))
 
                         Text(
-                            text = "Attendance Recorded",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = VedaTextPrimary
+                            text = "Attendance Marked",
+                            style = VedaTheme.typography.sectionTitle,
+                            color = VedaInk
                         )
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
 
                         Text(
-                            text = "Your presence has already been marked.",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Normal,
-                            color = VedaTextMuted
+                            text = "Recorded at $timeRecordedText • $dateRecordedText",
+                            style = VedaTheme.typography.bodySecondary,
+                            color = VedaMuted
                         )
-                    }
-                }
-            }
-        } else {
-            // EMPTY / IDLE ATTENDANCE STATE CARD
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                color = VedaDarkSurface
-            ) {
-                Column(
-                    modifier = Modifier.padding(28.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(VedaSuccessGreen.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.CheckCircle,
-                            contentDescription = "Caught Up",
-                            tint = VedaSuccessGreen,
-                            modifier = Modifier.size(36.dp)
+
+                        Spacer(modifier = Modifier.height(VedaSpacingInstance.sm))
+
+                        Text(
+                            text = "Saved securely. Attendance cannot be edited.",
+                            style = VedaTheme.typography.caption,
+                            color = VedaMuted
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    // STATE 4 & 5: CLOSED OR UPCOMING
+                    else -> {
+                        val isClosed = nextSessionInfo == null
+                        val badgeText = if (isClosed) "CLOSED" else "UPCOMING"
+                        val titleText = if (isClosed) "Attendance session closed" else "Next attendance starts soon"
+                        val subtitleText = if (isClosed) "This session ended." else "Your next check-in will open soon."
 
-                    Text(
-                        text = "You're all caught up!",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = VedaTextPrimary
-                    )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            VedaStatusBadge(
+                                text = badgeText,
+                                style = VedaStatusStyle.NOT_MARKED
+                            )
+                        }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(VedaSpacingInstance.sm))
 
-                    Text(
-                        text = "No attendance is active right now.\nEnjoy your day!",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = VedaTextMuted,
-                        lineHeight = 18.sp
-                    )
+                        Text(
+                            text = titleText,
+                            style = VedaTheme.typography.sectionTitle,
+                            color = VedaInk
+                        )
+
+                        Spacer(modifier = Modifier.height(2.dp))
+
+                        Text(
+                            text = subtitleText,
+                            style = VedaTheme.typography.bodySecondary,
+                            color = VedaMuted
+                        )
+                    }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.xl))
 
-        // Section Title: Quick Actions
-        Text(
-            text = "Quick Actions",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            color = VedaTextPrimary
+        // Section Title: Quick Access
+        VedaSectionHeader(
+            title = "Quick Access"
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.md))
 
-        // Quick Access Grid
+        // Quick Access Grid Items
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(VedaSpacingInstance.sm)
         ) {
             QuickAccessCard(
                 title = "Notices",
-                badgeText = if (unreadNoticesCount > 0) "$unreadNoticesCount new" else "All read",
+                badgeText = if (unreadNoticesCount > 0) "$unreadNoticesCount new" else "View",
                 icon = Icons.Filled.Notifications,
                 onClick = onNoticesClick,
                 modifier = Modifier.weight(1f)
             )
 
             QuickAccessCard(
-                title = "Mess Menu",
+                title = "Mess",
                 badgeText = "Today",
                 icon = Icons.Filled.Restaurant,
                 onClick = onMessMenuClick,
@@ -353,13 +438,87 @@ fun TodayScreen(
             )
 
             QuickAccessCard(
-                title = "Hostel Info",
+                title = "Contacts",
+                badgeText = "Call",
+                icon = Icons.Filled.Contacts,
+                onClick = onContactsClick,
+                modifier = Modifier.weight(1f)
+            )
+
+            QuickAccessCard(
+                title = "Hostel",
                 badgeText = "View",
                 icon = Icons.Filled.CorporateFare,
                 onClick = onHostelInfoClick,
                 modifier = Modifier.weight(1f)
             )
         }
+
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.lg))
+
+        // Supporting Line: "A little more connected to campus."
+        Text(
+            text = "A little more connected to campus.",
+            style = VedaTheme.typography.bodySecondary,
+            color = VedaMuted,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(VedaSpacingInstance.xxl))
+    }
+
+    // Confirm Absent Dialog (Page 37)
+    if (showConfirmAbsentDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmAbsentDialog = false },
+            title = {
+                Text(
+                    text = "Mark yourself absent?",
+                    style = VedaTheme.typography.sectionTitle,
+                    color = VedaInk
+                )
+            },
+            text = {
+                Text(
+                    text = "This records ABSENT for this session. You cannot edit it afterward.",
+                    style = VedaTheme.typography.bodySecondary,
+                    color = VedaMuted
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showConfirmAbsentDialog = false
+                        isMarkingAttendance = true
+                        markingStatus = AttendanceStatus.ABSENT
+                        scope.launch {
+                            val result = StudentAttendanceRepository.markAttendance(context, AttendanceStatus.ABSENT)
+                            isMarkingAttendance = false
+                            result.onSuccess {
+                                Toast.makeText(context, "Attendance Marked: ABSENT", Toast.LENGTH_SHORT).show()
+                            }.onFailure { err ->
+                                Toast.makeText(context, err.message ?: "Failed to mark attendance", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = VedaAbsent,
+                        contentColor = VedaSurface
+                    ),
+                    shape = VedaShapesInstance.button
+                ) {
+                    Text("Mark Absent", style = VedaTheme.typography.caption)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmAbsentDialog = false }) {
+                    Text("Cancel", style = VedaTheme.typography.caption, color = VedaPrimary)
+                }
+            },
+            containerColor = VedaSurface,
+            shape = VedaShapesInstance.dialog
+        )
     }
 }
 
@@ -368,19 +527,26 @@ fun TodayScreen(
 fun TodayScreenPreview() {
     VEDAHOSTELSTUDENTSTheme {
         TodayScreen(
-            student = Student(),
+            student = Student(fullName = "Vivek Anand", roomNumber = "301", hostelName = "Charak Chatravas"),
             activeSession = AttendanceSession(
-                sessionType = AttendanceSessionType.MORNING,
-                title = "Morning Attendance",
-                startTimeText = "07:00 AM",
-                endTimeText = "09:00 AM",
-                cutoffTimeText = "09:00 AM"
+                sessionType = AttendanceSessionType.EVENING,
+                title = "EVENING ATTENDANCE",
+                startTimeText = "05:55 PM",
+                endTimeText = "06:00 PM",
+                cutoffTimeText = "06:00 PM"
             ),
+            nextSessionInfo = NextSessionInfo(
+                sessionType = AttendanceSessionType.EVENING,
+                title = "EVENING ATTENDANCE",
+                timeRangeText = "05:55 PM - 06:00 PM"
+            ),
+            schedule = AttendanceScheduleConfig(isConfigured = true),
             hasMarkedCurrentSession = false,
+            currentSessionRecord = null,
             unreadNoticesCount = 2,
-            onMarkPresentClick = {},
             onNoticesClick = {},
             onMessMenuClick = {},
+            onContactsClick = {},
             onHostelInfoClick = {}
         )
     }

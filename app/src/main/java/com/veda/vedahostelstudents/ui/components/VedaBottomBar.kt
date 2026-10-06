@@ -9,11 +9,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CorporateFare
@@ -35,11 +35,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.veda.vedahostelstudents.ui.theme.VedaBrightBlue
-import com.veda.vedahostelstudents.ui.theme.VedaDarkSurface
-import com.veda.vedahostelstudents.ui.theme.VedaTextMuted
-import com.veda.vedahostelstudents.ui.theme.VedaTextPrimary
+import com.veda.vedahostelstudents.ui.theme.VedaAccentSoft
+import com.veda.vedahostelstudents.ui.theme.VedaBorder
+import com.veda.vedahostelstudents.ui.theme.VedaNavBg
+import com.veda.vedahostelstudents.ui.theme.VedaNavSelected
+import com.veda.vedahostelstudents.ui.theme.VedaNavUnselected
+import com.veda.vedahostelstudents.ui.theme.VedaShapesInstance
+import com.veda.vedahostelstudents.ui.theme.VedaSpacingInstance
+import com.veda.vedahostelstudents.ui.theme.VedaSurface
+import com.veda.vedahostelstudents.ui.theme.VedaTheme
 
 enum class BottomTab(
     val route: String,
@@ -59,62 +63,71 @@ fun VedaBottomBar(
     onTabSelected: (BottomTab) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = VedaDarkSurface,
-        shadowElevation = 12.dp
+    // 72dp Floating bar with outer inset (Page 38 & 46)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = VedaSpacingInstance.lg,
+                vertical = VedaSpacingInstance.sm
+            )
     ) {
-        Row(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp, horizontal = 12.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
+                .height(72.dp),
+            shape = VedaShapesInstance.card, // 24dp rounded surface
+            color = VedaSurface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, VedaBorder),
+            shadowElevation = 8.dp
         ) {
-            BottomTab.entries.forEach { tab ->
-                val isSelected = currentTab == tab
-                val iconColor by animateColorAsState(
-                    targetValue = if (isSelected) VedaBrightBlue else VedaTextMuted,
-                    label = "iconColor"
-                )
-                val textColor by animateColorAsState(
-                    targetValue = if (isSelected) VedaTextPrimary else VedaTextMuted,
-                    label = "textColor"
-                )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = VedaSpacingInstance.sm),
+                horizontalArrangement = Arrangement.SpaceAround,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BottomTab.entries.forEach { tab ->
+                    val isSelected = currentTab == tab
+                    val containerColor by animateColorAsState(
+                        targetValue = if (isSelected) VedaAccentSoft else VedaSurface,
+                        label = "bottomBarContainerColor"
+                    )
+                    val contentColor by animateColorAsState(
+                        targetValue = if (isSelected) VedaNavSelected else VedaNavUnselected,
+                        label = "bottomBarContentColor"
+                    )
 
-                Column(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { onTabSelected(tab) }
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        imageVector = if (isSelected) tab.selectedIcon else tab.unselectedIcon,
-                        contentDescription = tab.label,
-                        tint = iconColor,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = tab.label,
-                        fontSize = 11.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = textColor
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    if (isSelected) {
-                        Box(
-                            modifier = Modifier
-                                .size(width = 16.dp, height = 3.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(VedaBrightBlue)
-                        )
-                    } else {
-                        Spacer(modifier = Modifier.height(3.dp))
+                    Box(
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = 52.dp, minWidth = 64.dp)
+                            .clip(VedaShapesInstance.medium)
+                            .background(containerColor)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { onTabSelected(tab) }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isSelected) tab.selectedIcon else tab.unselectedIcon,
+                                contentDescription = tab.label,
+                                tint = contentColor,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = tab.label,
+                                style = VedaTheme.typography.navigation,
+                                color = contentColor
+                            )
+                        }
                     }
                 }
             }
